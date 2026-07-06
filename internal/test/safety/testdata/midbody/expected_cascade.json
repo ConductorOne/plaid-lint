@@ -1,0 +1,8 @@
+{
+  "description": "Edit mid's unexported helper body. The aspirational Phase 2/3 cascade is {mid} only — mid's gcexportdata is byte-stable (exported surface unchanged), and consumers' DepTypeDigest stays the same. The CURRENT Phase 1 cascade is {mid, consumera, consumerb} because L1's InputDigest is the gopls reachability hash, which folds in mid's source content; editing mid's source shifts consumera+consumerb's InputDigest even though their gcexportdata-derived DepTypeDigest stays warm.\n\nThis is the cascade-tier ≤ 30 s target's load-bearing gap-visibility test: when Phase 2 work re-keys L1 on DepTypeDigest, this expected_cascade.json shrinks to [example.com/safety/midbody/mid] and the cascade-tier latency drops accordingly. See NOTES.md D-53 for the design choice and the matching note in leaf_body.",
+  "expected_packages": [
+    "example.com/safety/midbody/consumera",
+    "example.com/safety/midbody/consumerb",
+    "example.com/safety/midbody/mid"
+  ]
+}

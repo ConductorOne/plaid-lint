@@ -1,0 +1,14 @@
+# Schema: v1. Based on uber-go/guide #4 in r7's corpus.
+# Reference config, 5 linters only.
+
+run:
+  tests: false
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - goimports
+    - ineffassign
+    - govet
+    - misspell

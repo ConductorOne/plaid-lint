@@ -1,0 +1,36 @@
+<testsuites>
+  <testsuite name="pkg/a/a.go" tests="2" errors="0" failures="2">
+    <testcase name="errcheck" classname="pkg/a/a.go:10:5">
+      <failure message="pkg/a/a.go:10:5: Error return value of `f.Close` is not checked" type="error"><![CDATA[error: Error return value of `f.Close` is not checked
+Category: errcheck
+File: pkg/a/a.go
+Line: 10
+Details: ]]></failure>
+    </testcase>
+    <testcase name="staticcheck" classname="pkg/a/a.go:25:2">
+      <failure message="pkg/a/a.go:25:2: SA4006: this value of x is never used" type="warning"><![CDATA[warning: SA4006: this value of x is never used
+Category: staticcheck
+File: pkg/a/a.go
+Line: 25
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="pkg/b/b.go" tests="1" errors="0" failures="1">
+    <testcase name="ineffassign" classname="pkg/b/b.go:7:13">
+      <failure message="pkg/b/b.go:7:13: ineffectual assignment to err" type="warning"><![CDATA[warning: ineffectual assignment to err
+Category: ineffassign
+File: pkg/b/b.go
+Line: 7
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="pkg/c/c.go" tests="1" errors="0" failures="1">
+    <testcase name="unused" classname="pkg/c/c.go:100">
+      <failure message="pkg/c/c.go:100: func unusedHelper is unused" type="info"><![CDATA[info: func unusedHelper is unused
+Category: unused
+File: pkg/c/c.go
+Line: 100
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

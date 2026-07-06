@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="5.0">
+  <file name="pkg/foo/foo.go">
+    <error column="9" line="42" message="Error return value of `f.Close` is not checked" severity="error" source="errcheck"></error>
+  </file>
+</checkstyle>

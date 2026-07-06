@@ -1,0 +1,36 @@
+# Schema: v2. Based on milvus-io/milvus #9 in r7's corpus.
+# 12 linters, depguard cockroachdb/errors + gogo/protobuf.
+version: "2"
+
+run:
+  timeout: 20m
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - durationcheck
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unused
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: "github.com/cockroachdb/errors"
+              desc: "use stdlib errors"
+            - pkg: "github.com/gogo/protobuf"
+              desc: "use google.golang.org/protobuf"
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports

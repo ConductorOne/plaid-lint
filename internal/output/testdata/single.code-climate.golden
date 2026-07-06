@@ -1,0 +1,1 @@
+[{"description":"errcheck: Error return value of `f.Close` is not checked","check_name":"errcheck","severity":"critical","fingerprint":"3A5B147013564DBFC335B9EE891E7649","location":{"path":"pkg/foo/foo.go","lines":{"begin":42}}}]

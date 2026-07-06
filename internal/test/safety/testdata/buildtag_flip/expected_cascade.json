@@ -1,0 +1,9 @@
+{
+  "description": "Flip targetpkg/extra.go's `//go:build` constraint from `linux || darwin` (included on test platforms) to `!linux && !darwin` (excluded). The exclusion removes the Extra type from targetpkg's exported surface, changing targetpkg's gcexportdata. Every consumer of targetpkg observes a new DepTypeDigest. Expected cascade: {targetpkg, c1, c2, c3} — the 3 consumers plus targetpkg itself.",
+  "expected_packages": [
+    "example.com/safety/buildtagflip/c1",
+    "example.com/safety/buildtagflip/c2",
+    "example.com/safety/buildtagflip/c3",
+    "example.com/safety/buildtagflip/targetpkg"
+  ]
+}

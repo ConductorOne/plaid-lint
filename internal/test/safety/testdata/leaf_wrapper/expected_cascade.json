@@ -1,0 +1,7 @@
+{
+  "description": "Add a NEW exported printf-style wrapper function (Warningf) to leaf. The printf analyzer publishes a new `isWrapper` fact about leaf.Warningf, changing leaf's exported fact set. Consumer's L1 action ID depends on DepFactsDigest, so the post-edit cascade is {leaf, consumer} — even though consumer's source is untouched and consumer doesn't call Warningf.",
+  "expected_packages": [
+    "example.com/safety/leafwrapper/consumer",
+    "example.com/safety/leafwrapper/leaf"
+  ]
+}

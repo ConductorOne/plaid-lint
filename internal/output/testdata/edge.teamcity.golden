@@ -1,0 +1,5 @@
+##teamcity[inspectionType id='govet' name='govet' description='govet' category='Golangci-lint reports']
+##teamcity[inspection typeId='govet' message='very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end.' file='pkg/edge/long.go' line='1' SEVERITY='ERROR']
+##teamcity[inspection typeId='govet' message='first line of message|nsecond line|nthird line' file='pkg/edge/multiline.go' line='3' SEVERITY='WARNING']
+##teamcity[inspectionType id='errcheck' name='errcheck' description='errcheck' category='Golangci-lint reports']
+##teamcity[inspection typeId='errcheck' message='Error return value is not checked' file='pkg/edge/path with spaces/foo.go' line='12' SEVERITY='ERROR']

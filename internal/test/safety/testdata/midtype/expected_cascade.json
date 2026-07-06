@@ -1,0 +1,8 @@
+{
+  "description": "Add an exported field to mid.MidT. The mid package's gcexportdata changes, so every transitive consumer's DepTypeDigest changes too. Expected cascade: {mid, consumera, consumerb}. The unchanged leaf package is NOT in the cascade because leaf's source digest is stable and leaf depends on nothing upstream.",
+  "expected_packages": [
+    "example.com/safety/midtype/consumera",
+    "example.com/safety/midtype/consumerb",
+    "example.com/safety/midtype/mid"
+  ]
+}

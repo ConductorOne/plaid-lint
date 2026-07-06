@@ -1,0 +1,11 @@
+<testsuites>
+  <testsuite name="pkg/foo/foo.go" tests="1" errors="0" failures="1">
+    <testcase name="errcheck" classname="pkg/foo/foo.go:42:9">
+      <failure message="pkg/foo/foo.go:42:9: Error return value of `f.Close` is not checked" type="error"><![CDATA[error: Error return value of `f.Close` is not checked
+Category: errcheck
+File: pkg/foo/foo.go
+Line: 42
+Details: 	f.Close()]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

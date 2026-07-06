@@ -1,0 +1,8 @@
+{
+  "description": "Bump go.mod's `go` directive from 1.22 to 1.23. Every package's typeCheckInputs.goVersion changes (localPackageKey reads it), so every package's L1 action ID changes too. Expected cascade: every package in the module. D-25/D-40 territory — if the goVersion regresses to 0, this test will surface it (the cascade observed would be empty because analyzers would skip on compiles=false).",
+  "expected_packages": [
+    "example.com/safety/gomodbump/consumer",
+    "example.com/safety/gomodbump/leaf",
+    "example.com/safety/gomodbump/mid"
+  ]
+}

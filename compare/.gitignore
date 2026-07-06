@@ -1,0 +1,6 @@
+# Raw JSON outputs and detailed divergence dumps from comparison runs
+# are large (~120 MB plaid.json, ~94 MB diff.md). Keep them out of git;
+# regenerate via scripts/compare-against-c1.sh when needed.
+*.json
+*-divergence.md
+*.diff.md

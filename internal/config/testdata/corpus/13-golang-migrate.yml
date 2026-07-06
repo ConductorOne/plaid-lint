@@ -1,0 +1,24 @@
+# Schema: v1. Based on golang-migrate/migrate #13 in r7's corpus.
+# 7 linters, gofmt only, hasn't migrated.
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - misspell
+    - unused
+
+linters-settings:
+  errcheck:
+    check-blank: true
+
+issues:
+  exclude-generated: strict

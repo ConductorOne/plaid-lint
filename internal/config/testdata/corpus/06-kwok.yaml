@@ -1,0 +1,44 @@
+# Schema: v2. Based on kubernetes-sigs/kwok #6 in r7's corpus.
+# gocyclo=50, importas k8s aliases, gci sigs.k8s.io.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gocyclo
+    - importas
+    - gocritic
+  settings:
+    gocyclo:
+      min-complexity: 50
+    importas:
+      no-unaliased: false
+      no-extra-aliases: false
+      alias:
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/api/apps/v1
+          alias: appsv1
+        - pkg: sigs.k8s.io/controller-runtime/pkg/client
+          alias: ctrlclient
+    gocritic:
+      enabled-tags:
+        - performance
+
+formatters:
+  enable:
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(sigs.k8s.io/kwok)

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>plaid-lint report</title>
+<style>
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2em; }
+h1 { font-size: 1.4em; }
+.summary { color: #555; margin-bottom: 1em; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 6px 10px; vertical-align: top; text-align: left; font-size: 0.9em; }
+th { background: #f4f4f4; }
+.sev-error { color: #b00020; font-weight: 600; }
+.sev-warning { color: #b07b00; }
+.sev-info { color: #00569b; }
+pre { margin: 0; font-size: 0.85em; white-space: pre-wrap; }
+.empty { color: #777; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>plaid-lint report</h1>
+<div class="summary">3 diagnostics</div>
+
+<table>
+<thead><tr><th>Position</th><th>Linter</th><th>Severity</th><th>Message</th><th>Code</th></tr></thead>
+<tbody>
+<tr>
+<td>pkg/edge/long.go:1:1</td>
+<td>govet</td>
+<td class="sev-error">error</td>
+<td>very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end.</td>
+<td><pre></pre></td>
+</tr>
+<tr>
+<td>pkg/edge/multiline.go:3:5</td>
+<td>govet</td>
+<td class="sev-warning">warning</td>
+<td>first line of message
+second line
+third line</td>
+<td><pre></pre></td>
+</tr>
+<tr>
+<td>pkg/edge/path with spaces/foo.go:12:3</td>
+<td>errcheck</td>
+<td class="sev-error">error</td>
+<td>Error return value is not checked</td>
+<td><pre></pre></td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>

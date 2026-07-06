@@ -1,0 +1,2 @@
+##teamcity[inspectionType id='errcheck' name='errcheck' description='errcheck' category='Golangci-lint reports']
+##teamcity[inspection typeId='errcheck' message='Error return value of `f.Close` is not checked' file='pkg/foo/foo.go' line='42' SEVERITY='ERROR']

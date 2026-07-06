@@ -1,0 +1,15 @@
+/bin/
+/dist/
+*.test
+*.out
+*.pb
+*.pprof
+*.prof
+/coverage/
+/.cache/
+/tmp/
+.DS_Store
+
+# Cached helper binary built by scripts/compare-against-c1.sh
+/cmd/strip-tracecheck-config/strip-tracecheck-config
+/vendor/

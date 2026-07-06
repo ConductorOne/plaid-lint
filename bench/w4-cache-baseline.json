@@ -1,0 +1,17 @@
+{
+  "disk_bytes": 3420002,
+  "go_version": "go1.26",
+  "n": 10000,
+  "per_entry_bytes": 342,
+  "platform": "linux/arm64",
+  "read_max_us": 167,
+  "read_mean_us": 23,
+  "read_p50_us": 22,
+  "read_p99_us": 34,
+  "read_total_ms": 232,
+  "write_max_us": 761,
+  "write_mean_us": 101,
+  "write_p50_us": 96,
+  "write_p99_us": 166,
+  "write_total_ms": 1016
+}

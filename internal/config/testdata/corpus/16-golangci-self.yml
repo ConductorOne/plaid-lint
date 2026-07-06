@@ -1,0 +1,118 @@
+# Schema: v2. Based on golangci/golangci-lint (self) #16 in r7's corpus.
+# 37 linters, depguard logrus/pkg/errors.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - dogsled
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forbidigo
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - govet
+    - importas
+    - ineffassign
+    - ireturn
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nolintlint
+    - perfsprint
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        logger:
+          deny:
+            - pkg: "github.com/sirupsen/logrus"
+              desc: "use log/slog"
+            - pkg: "github.com/pkg/errors"
+              desc: "use fmt.Errorf and errors.Is/As"
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+  exclusions:
+    generated: strict
+    presets:
+      - common-false-positives
+      - legacy
+    rules:
+      - path: "test/testdata"
+        linters:
+          - errcheck
+
+severity:
+  default: warning
+  rules:
+    - severity: error
+      linters:
+        - gosec
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/golangci/golangci-lint)

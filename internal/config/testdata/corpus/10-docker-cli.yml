@@ -1,0 +1,45 @@
+# Schema: v2. Based on docker/cli #10 in r7's corpus.
+# 45+ linters, deprecated containerd packages, line length 200.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: all
+  disable:
+    - cyclop
+    - dupl
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - godox
+    - lll
+    - nestif
+    - nlreturn
+    - varnamelen
+    - wsl
+  settings:
+    lll:
+      line-length: 200
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: "github.com/containerd/containerd/v2"
+              desc: "use github.com/containerd/containerd v1"
+            - pkg: "io/ioutil"
+              desc: "use os/io"
+    revive:
+      rules:
+        - name: var-naming
+          arguments:
+            - ["ID"]
+            - ["VM"]
+  exclusions:
+    generated: strict
+    rules:
+      - linters: [errcheck]
+        path: "_test\\.go"

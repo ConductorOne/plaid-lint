@@ -1,0 +1,26 @@
+# Schema: v2. Based on docker/go-imageinspect #12 in r7's corpus.
+# 12 linters, structcheck disabled (Go 1.18 generics).
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unused
+    - whitespace
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="5.0">
+  <file name="pkg/a/a.go">
+    <error column="5" line="10" message="Error return value of `f.Close` is not checked" severity="error" source="errcheck"></error>
+    <error column="2" line="25" message="SA4006: this value of x is never used" severity="warning" source="staticcheck"></error>
+  </file>
+  <file name="pkg/b/b.go">
+    <error column="13" line="7" message="ineffectual assignment to err" severity="warning" source="ineffassign"></error>
+  </file>
+  <file name="pkg/c/c.go">
+    <error column="0" line="100" message="func unusedHelper is unused" severity="info" source="unused"></error>
+  </file>
+</checkstyle>

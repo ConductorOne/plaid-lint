@@ -1,0 +1,1 @@
+{"issues":[{"linter":"errcheck","message":"Error return value of `f.Close` is not checked","severity":"error","pos":{"filename":"pkg/foo/foo.go","line":42,"column":9},"source_lines":["\tf.Close()"]}]}

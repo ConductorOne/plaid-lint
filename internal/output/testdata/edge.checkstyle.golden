@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="5.0">
+  <file name="pkg/edge/long.go">
+    <error column="1" line="1" message="very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end." severity="error" source="govet"></error>
+  </file>
+  <file name="pkg/edge/multiline.go">
+    <error column="5" line="3" message="first line of message&#xA;second line&#xA;third line" severity="warning" source="govet"></error>
+  </file>
+  <file name="pkg/edge/path with spaces/foo.go">
+    <error column="3" line="12" message="Error return value is not checked" severity="error" source="errcheck"></error>
+  </file>
+</checkstyle>

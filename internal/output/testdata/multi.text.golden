@@ -1,0 +1,4 @@
+pkg/a/a.go:10:5: Error return value of `f.Close` is not checked (errcheck)
+pkg/a/a.go:25:2: SA4006: this value of x is never used (staticcheck)
+pkg/b/b.go:7:13: ineffectual assignment to err (ineffassign)
+pkg/c/c.go:100: func unusedHelper is unused (unused)

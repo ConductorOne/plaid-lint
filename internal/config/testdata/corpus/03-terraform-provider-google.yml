@@ -1,0 +1,30 @@
+# Schema: v1. Based on hashicorp/terraform-provider-google #3 in r7's corpus.
+# Minimal, hasn't migrated, depguard SDK patterns.
+
+run:
+  timeout: 10m
+  skip-files:
+    - ".*generated.*\\.go$"
+
+linters:
+  disable-all: true
+  enable:
+    - depguard
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+
+linters-settings:
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+            desc: "Use github.com/hashicorp/terraform-plugin-framework instead"
+
+issues:
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - errcheck

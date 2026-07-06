@@ -1,0 +1,35 @@
+# Schema: v2. Based on docker/buildx #11 in r7's corpus.
+# 14 linters, vendor mode, gosec exclusions.
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: vendor
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - forcetypeassert
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - typecheck
+    - unused
+    - whitespace
+  settings:
+    gosec:
+      excludes:
+        - G204  # Subprocess launched with variable
+        - G404  # Insecure random number source
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

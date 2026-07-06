@@ -1,0 +1,7 @@
+{
+  "description": "Edit leaf's unexported helper body. The aspirational Phase 2/3 cascade is {leaf} only — gcexportdata stays warm, no fact change. The CURRENT Phase 1 cascade is {leaf, consumer} because L1's InputDigest is the gopls package handle's `key` (a reachability hash over all transitive source content), not the dep's gcexportdata digest. Editing leaf's source therefore shifts consumer's InputDigest even though consumer's DepTypeDigest would be byte-stable in the Phase 2/3 design.\n\nThis is a load-bearing gap-visibility test: when the Phase 2 work tightens L1's cache key to use DepTypeDigest instead of the gopls reachability hash, this fixture's expected_cascade.json should shrink to [example.com/safety/leafbody/leaf]. The shrink is the W12/Phase 2 success signal. See NOTES.md D-53 for the design choice.",
+  "expected_packages": [
+    "example.com/safety/leafbody/consumer",
+    "example.com/safety/leafbody/leaf"
+  ]
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>plaid-lint report</title>
+<style>
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2em; }
+h1 { font-size: 1.4em; }
+.summary { color: #555; margin-bottom: 1em; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 6px 10px; vertical-align: top; text-align: left; font-size: 0.9em; }
+th { background: #f4f4f4; }
+.sev-error { color: #b00020; font-weight: 600; }
+.sev-warning { color: #b07b00; }
+.sev-info { color: #00569b; }
+pre { margin: 0; font-size: 0.85em; white-space: pre-wrap; }
+.empty { color: #777; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>plaid-lint report</h1>
+<div class="summary">0 diagnostics</div>
+
+<p class="empty">No diagnostics.</p>
+
+</body>
+</html>

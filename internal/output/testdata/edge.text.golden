@@ -1,0 +1,5 @@
+pkg/edge/long.go:1:1: very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end. (govet)
+pkg/edge/multiline.go:3:5: first line of message
+second line
+third line (govet)
+pkg/edge/path with spaces/foo.go:12:3: Error return value is not checked (errcheck)

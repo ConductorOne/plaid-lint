@@ -1,0 +1,40 @@
+# Schema: v2. Based on crossplane/crossplane #5 in r7's corpus.
+# 30+ linters disabled by category, testify/ginkgo depguard.
+version: "2"
+
+run:
+  timeout: 10m
+
+linters:
+  default: all
+  disable:
+    - dupl
+    - exhaustruct
+    - gochecknoinits
+    - gochecknoglobals
+    - gomoddirectives
+    - lll
+    - nilnil
+    - wsl
+    - varnamelen
+  settings:
+    depguard:
+      rules:
+        no-direct-testify:
+          deny:
+            - pkg: github.com/stretchr/testify/assert
+              desc: "use github.com/crossplane/crossplane-runtime/pkg/test"
+        no-direct-ginkgo:
+          deny:
+            - pkg: github.com/onsi/ginkgo
+              desc: "use 1.x ginkgo, see CONTRIBUTING.md"
+    revive:
+      rules:
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+  exclusions:
+    generated: strict
+    paths:
+      - "zz_generated\\..+\\.go$"
+      - "_generated\\.go$"

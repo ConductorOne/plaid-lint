@@ -1,0 +1,1 @@
+pkg/foo/foo.go:42:9  errcheck  Error return value of `f.Close` is not checked

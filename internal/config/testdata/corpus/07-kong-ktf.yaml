@@ -1,0 +1,32 @@
+# Schema: v2. Based on Kong/kubernetes-testing-framework #7 in r7's corpus.
+# forbidigo deprecated CoreV1, gomodguard ghodss/yaml.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - forbidigo
+    - gomodguard
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    forbidigo:
+      forbid:
+        - p: "k8s.io/api/core/v1.PodSpec"
+          msg: "use github.com/kong/kubernetes-testing-framework Pod"
+        - "fmt\\.Println"
+    gomodguard:
+      blocked:
+        modules:
+          - github.com/ghodss/yaml:
+              recommendations:
+                - sigs.k8s.io/yaml
+              reason: "use sigs.k8s.io/yaml; ghodss/yaml is unmaintained"
+  exclusions:
+    generated: strict

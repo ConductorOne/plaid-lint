@@ -1,0 +1,69 @@
+# Schema: v2. Based on prometheus/prometheus #1 in r7's corpus.
+# 23 linters, depguard atomic/ioutil, perfsprint, 15m timeout.
+version: "2"
+
+run:
+  timeout: 15m
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - perfsprint
+    - predeclared
+    - revive
+    - staticcheck
+    - testifylint
+    - unconvert
+    - unused
+    - usestdlibvars
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        atomic:
+          deny:
+            - pkg: sync/atomic
+              desc: "Use go.uber.org/atomic instead."
+        ioutil:
+          deny:
+            - pkg: io/ioutil
+              desc: "Use os/io instead."
+    perfsprint:
+      err-error: true
+      errorf: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+          disabled: true
+        - name: unreachable-code
+  exclusions:
+    generated: strict
+    rules:
+      - linters: [errcheck]
+        text: "Error return value of `.*Close` is not checked"

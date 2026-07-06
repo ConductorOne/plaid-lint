@@ -1,0 +1,31 @@
+<testsuites>
+  <testsuite name="pkg/edge/long.go" tests="1" errors="0" failures="1">
+    <testcase name="govet" classname="pkg/edge/long.go:1:1">
+      <failure message="pkg/edge/long.go:1:1: very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end." type="error"><![CDATA[error: very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. very long message segment. end.
+Category: govet
+File: pkg/edge/long.go
+Line: 1
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="pkg/edge/multiline.go" tests="1" errors="0" failures="1">
+    <testcase name="govet" classname="pkg/edge/multiline.go:3:5">
+      <failure message="pkg/edge/multiline.go:3:5: first line of message&#xA;second line&#xA;third line" type="warning"><![CDATA[warning: first line of message
+second line
+third line
+Category: govet
+File: pkg/edge/multiline.go
+Line: 3
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="pkg/edge/path with spaces/foo.go" tests="1" errors="0" failures="1">
+    <testcase name="errcheck" classname="pkg/edge/path with spaces/foo.go:12:3">
+      <failure message="pkg/edge/path with spaces/foo.go:12:3: Error return value is not checked" type="error"><![CDATA[error: Error return value is not checked
+Category: errcheck
+File: pkg/edge/path with spaces/foo.go
+Line: 12
+Details: ]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

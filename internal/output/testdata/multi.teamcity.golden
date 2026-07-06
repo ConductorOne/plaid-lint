@@ -1,0 +1,8 @@
+##teamcity[inspectionType id='errcheck' name='errcheck' description='errcheck' category='Golangci-lint reports']
+##teamcity[inspection typeId='errcheck' message='Error return value of `f.Close` is not checked' file='pkg/a/a.go' line='10' SEVERITY='ERROR']
+##teamcity[inspectionType id='staticcheck' name='staticcheck' description='staticcheck' category='Golangci-lint reports']
+##teamcity[inspection typeId='staticcheck' message='SA4006: this value of x is never used' file='pkg/a/a.go' line='25' SEVERITY='WARNING']
+##teamcity[inspectionType id='ineffassign' name='ineffassign' description='ineffassign' category='Golangci-lint reports']
+##teamcity[inspection typeId='ineffassign' message='ineffectual assignment to err' file='pkg/b/b.go' line='7' SEVERITY='WARNING']
+##teamcity[inspectionType id='unused' name='unused' description='unused' category='Golangci-lint reports']
+##teamcity[inspection typeId='unused' message='func unusedHelper is unused' file='pkg/c/c.go' line='100' SEVERITY='INFO']

@@ -1,0 +1,24 @@
+# Schema: v2. Based on thanos-io/thanos #15 in r7's corpus.
+# 5 linters, errcheck Cortex/loggers, misspell US.
+version: "2"
+
+run:
+  timeout: 10m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+  settings:
+    errcheck:
+      exclude-functions:
+        - github.com/cortexproject/cortex/pkg/util/log.Logger.Log
+        - github.com/go-kit/log.Logger.Log
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
