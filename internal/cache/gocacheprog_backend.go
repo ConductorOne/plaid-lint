@@ -25,12 +25,75 @@ type gocacheprogBackend struct {
 	client *gocacheprog.Client
 }
 
-func newGocacheprogBackend(binary string) (*gocacheprogBackend, error) {
-	c, err := gocacheprog.New(binary, nil)
+func newGocacheprogBackend(cacheprog string) (*gocacheprogBackend, error) {
+	// GOCACHEPROG is a command line — the helper program followed by optional
+	// arguments, tokenized the way the go command does it — not a bare
+	// executable path. Split it before exec so a value like "helper --dir /tmp"
+	// runs `helper` with `--dir /tmp`, instead of trying to exec a file whose
+	// name is the entire string (which fails with "no such file or directory").
+	name, args, err := splitCacheProg(cacheprog)
+	if err != nil {
+		return nil, err
+	}
+	c, err := gocacheprog.New(name, args)
 	if err != nil {
 		return nil, err
 	}
 	return &gocacheprogBackend{client: c}, nil
+}
+
+// splitCacheProg tokenizes a GOCACHEPROG command line into the helper program
+// and its arguments. GOCACHEPROG may carry flags, so the whole value is not a
+// bare executable path.
+func splitCacheProg(cacheprog string) (name string, args []string, err error) {
+	fields, err := splitQuoted(cacheprog)
+	if err != nil {
+		return "", nil, fmt.Errorf("plaid-lint: parse GOCACHEPROG: %w", err)
+	}
+	if len(fields) == 0 {
+		return "", nil, errors.New("plaid-lint: GOCACHEPROG is empty")
+	}
+	return fields[0], fields[1:], nil
+}
+
+// splitQuoted splits s into space-separated fields, allowing single- or
+// double-quoted fields to contain spaces. It mirrors the tokenization the go
+// command applies to GOCACHEPROG (cmd/internal/quoted.Split): quotes are not
+// nestable or mixable and escapes are not expanded.
+func splitQuoted(s string) ([]string, error) {
+	var fields []string
+	for len(s) > 0 {
+		for len(s) > 0 && isCacheProgSpace(s[0]) {
+			s = s[1:]
+		}
+		if len(s) == 0 {
+			break
+		}
+		if c := s[0]; c == '"' || c == '\'' {
+			s = s[1:]
+			i := 0
+			for i < len(s) && s[i] != c {
+				i++
+			}
+			if i >= len(s) {
+				return nil, fmt.Errorf("unterminated %c quote", c)
+			}
+			fields = append(fields, s[:i])
+			s = s[i+1:]
+			continue
+		}
+		i := 0
+		for i < len(s) && !isCacheProgSpace(s[i]) {
+			i++
+		}
+		fields = append(fields, s[:i])
+		s = s[i:]
+	}
+	return fields, nil
+}
+
+func isCacheProgSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
 // deriveActionID folds namespace into the action ID. The null byte
