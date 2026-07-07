@@ -149,7 +149,18 @@ func mergeFormats(base, overlay Formats) Formats {
 
 func mergeLinters(base, overlay Linters) Linters {
 	base.Default = pickString(base.Default, overlay.Default)
-	base.Enable = appendUnique(base.Enable, overlay.Enable)
+	// When the overlay resets the default group to "none" (via
+	// `--default=none` or the exclusive `--enable-only` flag), the
+	// effective enable set must start empty: the base/file-config
+	// enabled linters must not leak through. Replace rather than append
+	// so `--enable-only X` runs exactly X, matching golangci-lint v2's
+	// exclusive semantics. Any other default (standard/all/fast or
+	// unset) keeps the additive `--enable` behavior.
+	if overlay.Default == GroupNone {
+		base.Enable = appendUnique(nil, overlay.Enable)
+	} else {
+		base.Enable = appendUnique(base.Enable, overlay.Enable)
+	}
 	base.Disable = appendUnique(base.Disable, overlay.Disable)
 	if overlay.FastOnly {
 		base.FastOnly = true

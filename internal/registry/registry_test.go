@@ -163,6 +163,70 @@ func TestBuild_EnableDisable_Union(t *testing.T) {
 	}
 }
 
+// TestBuild_EnableOnly_Exclusive asserts the end-to-end behavior of
+// the exclusive `--enable-only` / `--default=none --enable=` path: a
+// CLI overlay that resets the default group to "none" must produce an
+// active set of exactly the enabled linters, with none of the
+// file-config's enabled linters leaking through.
+func TestBuild_EnableOnly_Exclusive(t *testing.T) {
+	// File config enables a broad set alongside default=standard.
+	base := config.NewDefault()
+	base.Linters.Default = "standard"
+	base.Linters.Enable = []string{"bodyclose", "errorlint", "gocritic", "gosec", "misspell", "revive"}
+
+	// Overlay mirrors applyOverlay() for `--enable-only staticcheck`.
+	overlay := &config.Config{}
+	overlay.Linters.Default = "none"
+	overlay.Linters.Enable = []string{"staticcheck"}
+
+	cfg := config.Merge(base, overlay)
+
+	reg, _, err := Build(cfg)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	names := map[string]bool{}
+	for _, r := range reg.Enabled() {
+		names[r.Name] = true
+	}
+	if !names["staticcheck"] {
+		t.Errorf("staticcheck not enabled: %v", sortedKeys(names))
+	}
+	for _, leaked := range base.Linters.Enable {
+		if names[leaked] {
+			t.Errorf("file-config linter %q leaked through --enable-only: %v", leaked, sortedKeys(names))
+		}
+	}
+}
+
+// TestBuild_EnableAdditive_KeepsConfig is the regression guard for the
+// normal additive path: a plain `--enable=X` overlay (no default
+// override) must ADD X to the file-config enabled set, not replace it.
+func TestBuild_EnableAdditive_KeepsConfig(t *testing.T) {
+	base := config.NewDefault()
+	base.Linters.Default = "standard"
+	base.Linters.Enable = []string{"bodyclose", "gosec"}
+
+	overlay := &config.Config{}
+	overlay.Linters.Enable = []string{"misspell"} // plain --enable=misspell
+
+	cfg := config.Merge(base, overlay)
+
+	reg, _, err := Build(cfg)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	names := map[string]bool{}
+	for _, r := range reg.Enabled() {
+		names[r.Name] = true
+	}
+	for _, want := range []string{"bodyclose", "gosec", "misspell"} {
+		if !names[want] {
+			t.Errorf("additive enable dropped %q: %v", want, sortedKeys(names))
+		}
+	}
+}
+
 // TestBuild_V1Alias_Gosimple resolves the v1 alias to staticcheck and
 // emits a structured warning naming the alias.
 func TestBuild_V1Alias_Gosimple(t *testing.T) {
