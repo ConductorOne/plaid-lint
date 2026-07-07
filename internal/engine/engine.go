@@ -368,6 +368,36 @@ type runInProcessResult struct {
 	CacheMetrics CacheMetrics
 }
 
+// dropTestSupersededPackages removes the plain, non-test variant of a
+// package when its in-package test variant is also in the set. A
+// package with in-package test files is loaded as two workspace roots
+// — "p" (GoFiles=[p.go]) and "p [p.test]" (GoFiles=[p.go p_test.go]) —
+// and the latter is a strict superset. Analyzing both is redundant for
+// per-file analyzers (their p.go diagnostics dedup by position) and
+// incorrect for whole-program analyzers such as unused/U1000: the plain
+// variant cannot see usage inside p_test.go, so a symbol referenced
+// only from an in-package test is falsely reported unused. Keeping only
+// the test-augmented variant matches golangci-lint v2 and staticcheck.
+//
+// The trigger is the in-package test variant only (ForTest == PkgPath).
+// An external test package ("p_test [p.test]", ForTest == "p") does not
+// contain p's source files, so it never supersedes p — dropping p on its
+// account would leave p.go unanalyzed (a false negative). When run.tests
+// is disabled no test variants are loaded, so this drops nothing.
+func dropTestSupersededPackages(pkgs map[metadata.PackageID]*metadata.Package) {
+	hasInPackageTestVariant := make(map[metadata.PackagePath]bool, len(pkgs))
+	for _, mp := range pkgs {
+		if mp.ForTest != "" && mp.ForTest == mp.PkgPath {
+			hasInPackageTestVariant[mp.PkgPath] = true
+		}
+	}
+	for id, mp := range pkgs {
+		if mp.ForTest == "" && hasInPackageTestVariant[mp.PkgPath] {
+			delete(pkgs, id)
+		}
+	}
+}
+
 func runInProcess(ctx context.Context, in RunInput, plan *runPlan) (*runInProcessResult, error) {
 	// cache.L0OverrideHits is a process-global cumulative counter;
 	// snapshot at entry so the per-Run delta is reported to callers
@@ -407,6 +437,7 @@ func runInProcess(ctx context.Context, in RunInput, plan *runPlan) (*runInProces
 		}
 		pkgs[mp.ID] = mp
 	}
+	dropTestSupersededPackages(pkgs)
 	if len(pkgs) == 0 {
 		return &runInProcessResult{}, nil
 	}
