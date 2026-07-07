@@ -15,15 +15,29 @@ import (
 
 func newTestCache(t *testing.T) *Cache {
 	t.Helper()
-	dir := t.TempDir()
+	return openTestCache(t, t.TempDir())
+}
+
+// openTestCache opens a cache at dir and registers a cleanup that drains
+// the background GC goroutine and closes the handle before t.TempDir's
+// deferred RemoveAll runs. t.Cleanup is LIFO and RemoveAll was registered
+// at the t.TempDir() call, so this cleanup always runs first.
+//
+// Draining GC is the load-bearing part: Open kicks off a background
+// goroutine that stamps .last-gc on completion, and racing that write
+// against RemoveAll leaves the parent dir non-empty ("directory not
+// empty"). Close is defensive — a no-op for the local backend, but it
+// tears down any subprocess-backed backend the same way.
+func openTestCache(t *testing.T, dir string) *Cache {
+	t.Helper()
 	c, err := Open(dir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	// Await the GC goroutine before t.TempDir cleanup; the goroutine
-	// stamps .last-gc on completion and racing that with RemoveAll
-	// breaks the parent-dir unlink.
-	t.Cleanup(c.WaitForGC)
+	t.Cleanup(func() {
+		c.WaitForGC()
+		_ = c.Close()
+	})
 	return c
 }
 
@@ -299,10 +313,7 @@ func TestGCOnOpen(t *testing.T) {
 	// .last-gc gate would otherwise skip the re-Open's GC; force it.
 	t.Setenv("PLAID_FORCE_GC", "1")
 	dir := t.TempDir()
-	c, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := openTestCache(t, dir)
 	e := sampleL1()
 	id := NewActionID([]byte("k"))
 	if err := c.WriteL1(e, id); err != nil {
@@ -317,10 +328,7 @@ func TestGCOnOpen(t *testing.T) {
 	// Re-open: GC runs with the default 30d threshold. GC is async
 	// (see Cache.Open godoc); wait for it explicitly so the assertion
 	// below isn't racing the background goroutine.
-	c2, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c2 := openTestCache(t, dir)
 	c2.WaitForGC()
 	if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("Open did not GC stale entry: %v", err)
@@ -508,10 +516,7 @@ func TestDefaultRootPrecedence(t *testing.T) {
 // engine has to invalidate the whole cache, so silent reuse is unsafe.
 func TestCacheVersionMismatchPurges(t *testing.T) {
 	dir := t.TempDir()
-	c, err := Open(dir)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	c := openTestCache(t, dir)
 
 	// Populate an L1 entry and an L2 entry.
 	e1 := sampleL1()
@@ -532,9 +537,7 @@ func TestCacheVersionMismatchPurges(t *testing.T) {
 	}
 
 	// Re-open: mismatch must purge typecheck/ and analyzer/.
-	if _, err := Open(dir); err != nil {
-		t.Fatalf("re-Open: %v", err)
-	}
+	openTestCache(t, dir)
 
 	// Subdirs must still exist but be empty.
 	for _, sub := range []string{"typecheck", "analyzer"} {
@@ -573,10 +576,7 @@ func TestCacheVersionMismatchPurges(t *testing.T) {
 // touch existing entries.
 func TestCacheVersionMatchPreservesEntries(t *testing.T) {
 	dir := t.TempDir()
-	c, err := Open(dir)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	c := openTestCache(t, dir)
 	e := sampleL1()
 	id := NewActionID([]byte("v-match"))
 	if err := c.WriteL1(e, id); err != nil {
@@ -586,9 +586,7 @@ func TestCacheVersionMatchPreservesEntries(t *testing.T) {
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("entry missing before re-Open: %v", err)
 	}
-	if _, err := Open(dir); err != nil {
-		t.Fatalf("re-Open: %v", err)
-	}
+	openTestCache(t, dir)
 	if _, err := os.Stat(p); err != nil {
 		t.Errorf("entry pruned by same-version Open: %v", err)
 	}

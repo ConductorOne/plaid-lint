@@ -74,6 +74,12 @@ func newBenchCache(b *testing.B) *Cache {
 	if err != nil {
 		b.Fatalf("Open: %v", err)
 	}
+	// Drain the background GC goroutine before b.TempDir's RemoveAll so
+	// its .last-gc stamp can't race the parent-dir unlink.
+	b.Cleanup(func() {
+		c.WaitForGC()
+		_ = c.Close()
+	})
 	return c
 }
 
@@ -99,6 +105,10 @@ func TestCacheBaselineReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		c.WaitForGC()
+		_ = c.Close()
+	})
 	base := sampleL1()
 	ids := make([]ActionID, N)
 
