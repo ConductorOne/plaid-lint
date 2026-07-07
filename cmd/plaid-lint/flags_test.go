@@ -150,13 +150,10 @@ func TestApplyOverlay_EnableOnlyReplaces(t *testing.T) {
 	if got, want := merged.Linters.Default, "none"; got != want {
 		t.Errorf("Linters.Default = %q, want %q (--enable-only should force none)", got, want)
 	}
-	// Merge appends the overlay's Enable; base.Enable carries through.
-	// --enable-only is documented as "Override linters configuration
-	// section to only run the specific linter(s)". The default=none
-	// + enable=[x,y] result correctly enables only [x, y] in the
-	// registry resolution because the registry starts from the
-	// "none" baseline.
-	if got, want := merged.Linters.Enable, []string{"a", "b", "x", "y"}; !reflect.DeepEqual(got, want) {
+	// --enable-only is the exclusive form: it forces default=none and
+	// must REPLACE the base/file-config enable list so only the named
+	// linters run. The base [a, b] must not leak through.
+	if got, want := merged.Linters.Enable, []string{"x", "y"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Linters.Enable = %v, want %v", got, want)
 	}
 }
