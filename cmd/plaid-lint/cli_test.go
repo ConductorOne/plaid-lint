@@ -143,6 +143,17 @@ func TestRun_NoConfigSucceeds(t *testing.T) {
 	}
 }
 
+func TestRun_EnableOnlyAnalyzerRejectsUnavailableName(t *testing.T) {
+	dir := fixtureModule(t)
+	code, _, stderr := runApp(t, dir, "run", "--no-config", "--enable-only-analyzer=not-an-analyzer")
+	if code != exitCLIError {
+		t.Fatalf("exit=%d want %d stderr=%q", code, exitCLIError, stderr)
+	}
+	if !strings.Contains(stderr, "not-an-analyzer") {
+		t.Fatalf("stderr missing analyzer name: %q", stderr)
+	}
+}
+
 func TestRun_AutoDiscoversConfig(t *testing.T) {
 	dir := fixtureRepo(t, `version: "2"
 linters:

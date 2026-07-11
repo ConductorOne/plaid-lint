@@ -158,6 +158,17 @@ func TestApplyOverlay_EnableOnlyReplaces(t *testing.T) {
 	}
 }
 
+func TestParseRunFlags_EnableOnlyAnalyzer(t *testing.T) {
+	rf := parseRunFlags(t, []string{
+		"--enable-only-analyzer=SA1019,S1000",
+		"--enable-only-analyzer=printf",
+	})
+	want := csvSlice{"SA1019", "S1000", "printf"}
+	if !reflect.DeepEqual(rf.Analyzers, want) {
+		t.Fatalf("Analyzers = %v, want %v", rf.Analyzers, want)
+	}
+}
+
 func TestApplyOverlay_NoConfigStillTracksOverlay(t *testing.T) {
 	// Even with no file config the overlay path runs.
 	rf := parseRunFlags(t, []string{"--default=none", "--enable=govet"})

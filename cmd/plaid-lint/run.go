@@ -71,8 +71,8 @@ func (a *app) runRun(args []string) int {
 	// Pin the runtime's soft memory ceiling at 75% of the cgroup's
 	// memory limit before any cache opens or analyzer drivers spin up:
 	// debug.SetMemoryLimit only affects subsequent allocations, and the
-	// cold-seed IR graph on c1's workspace peaks at ~52 GB without a
-	// ceiling. No-op if the user already set GOMEMLIMIT or set
+	// cold-seed IR graph on large workspaces can otherwise exceed the
+	// available memory. No-op if the user already set GOMEMLIMIT or set
 	// PLAID_DISABLE_AUTO_GOMEMLIMIT=1.
 	memlimit.Apply()
 
@@ -166,6 +166,13 @@ func (a *app) runRun(args []string) int {
 	}
 	for _, w := range regWarnings {
 		fmt.Fprintf(a.stderr, "plaid-lint: warning: %s: %s\n", w.Field, w.Message)
+	}
+	if len(rf.Analyzers) > 0 {
+		reg, err = reg.SelectAnalyzers(rf.Analyzers)
+		if err != nil {
+			fmt.Fprintf(a.stderr, "plaid-lint: %v\n", err)
+			return exitCLIError
+		}
 	}
 
 	// Step 6: build the exclusion filter and run the engine. The
@@ -619,6 +626,7 @@ Flags:
   -D, --disable strings                   Disable specific linter (repeatable)
   -E, --enable strings                    Enable specific linter (repeatable)
       --enable-only strings               Override config to only run the specific linter(s)
+      --enable-only-analyzer strings      Only run named analysis analyzers (repeatable)
       --fast-only                         Filter enabled linters to only fast linters
   -j, --concurrency int                   Number of CPUs to use (0 = auto)
       --modules-download-mode string      Modules download mode (mod|readonly|vendor)
