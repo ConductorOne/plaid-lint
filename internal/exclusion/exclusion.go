@@ -335,6 +335,51 @@ func (f *Filter) Apply(diags []output.Diagnostic) []output.Diagnostic {
 	return out
 }
 
+// ExcludesAllFiles reports whether every compiled file in a package is
+// suppressed by a file-wide exclusion. It deliberately considers only target
+// scope, global path rules, and generated-file detection. Per-issue rules,
+// nolint directives, and diagnostic-specific filters require analyzer output
+// and therefore cannot safely exclude an analysis root in advance.
+func (f *Filter) ExcludesAllFiles(paths []string) bool {
+	if f == nil || len(paths) == 0 {
+		return false
+	}
+	for _, path := range paths {
+		if !f.excludesFile(path) {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *Filter) excludesFile(path string) bool {
+	if path == "" {
+		return false
+	}
+	rel := f.relativePath(path)
+	if len(f.targetDirs) > 0 && !f.matchesTarget(rel) {
+		return true
+	}
+	for _, re := range f.pathPatterns {
+		if re.MatchString(rel) {
+			return true
+		}
+	}
+	if len(f.pathExceptPatterns) > 0 {
+		matched := false
+		for _, re := range f.pathExceptPatterns {
+			if re.MatchString(rel) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return true
+		}
+	}
+	return f.generatedMode != config.GeneratedModeDisable && f.isGenerated(path)
+}
+
 // dropDiagnostic reports whether d should be removed.
 func (f *Filter) dropDiagnostic(d output.Diagnostic) bool {
 	rel := f.relativePath(d.Pos.Filename)

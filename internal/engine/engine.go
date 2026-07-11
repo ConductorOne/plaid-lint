@@ -448,13 +448,14 @@ func runInProcess(ctx context.Context, in RunInput, plan *runPlan) (*runInProces
 	// workspace.
 	uriPkg := uriPkgPathMap(pkgs)
 	pkgDirs := pkgDirsFor(pkgs)
+	analysisRoots := pruneExcludedRoots(in.Filter, pkgs)
 
 	// L0 fast path. For each workspace package, compute the L0 key;
 	// hit → reconstitute output.Diagnostic from the cached blob and
 	// drop the package from the Analyze input set. Miss → keep it in
 	// pkgsToAnalyze. Cache writes happen post-Analyze (only for
 	// packages whose analysis succeeded).
-	pkgsToAnalyze, l0Hits, l0Keys, cachedDiags, lc := splitByL0(ctx, in, plan, inner, pkgs)
+	pkgsToAnalyze, l0Hits, l0Keys, cachedDiags, lc := splitByL0(ctx, in, plan, inner, analysisRoots)
 
 	// Dep-override fast path. When the L0 cache holds entries
 	// for the dep closure of pkgsToAnalyze, install synthetic
@@ -579,6 +580,27 @@ func runInProcess(ctx context.Context, in RunInput, plan *runPlan) (*runInProces
 		PkgDirs:      pkgDirs,
 		CacheMetrics: cm,
 	}, nil
+}
+
+// pruneExcludedRoots removes packages whose complete compiled file set is
+// suppressed by file-wide exclusions. They may still enter Snapshot.Analyze
+// through a retained root's dependency graph, where the driver runs only the
+// fact-producing analyzers and their prerequisites.
+func pruneExcludedRoots(filter *exclusion.Filter, pkgs map[metadata.PackageID]*metadata.Package) map[metadata.PackageID]*metadata.Package {
+	if filter == nil {
+		return pkgs
+	}
+	roots := make(map[metadata.PackageID]*metadata.Package, len(pkgs))
+	for id, mp := range pkgs {
+		paths := make([]string, 0, len(mp.CompiledGoFiles))
+		for _, uri := range mp.CompiledGoFiles {
+			paths = append(paths, uri.Path())
+		}
+		if !filter.ExcludesAllFiles(paths) {
+			roots[id] = mp
+		}
+	}
+	return roots
 }
 
 // splitByL0 partitions pkgs into the set that should still be sent to
