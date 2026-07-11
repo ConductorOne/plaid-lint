@@ -89,7 +89,7 @@ func TestL0_StoresPostFilter(t *testing.T) {
 	// path rule. After the cold run the L0 entries should be empty.
 	cfg := &config.Config{}
 	cfg.Linters.Exclusions = config.LinterExclusions{
-		Paths: []string{"main\\.go$"},
+		Rules: []config.ExcludeRule{{BaseRule: config.BaseRule{Path: "main\\.go$"}}},
 	}
 	filter, err := exclusion.NewFilter(cfg, dir, nil)
 	if err != nil {
@@ -125,7 +125,7 @@ func TestL0_StoresPostFilter(t *testing.T) {
 	// so a different filter would miss and re-analyze instead of hit.)
 	warmCfg := &config.Config{}
 	warmCfg.Linters.Exclusions = config.LinterExclusions{
-		Paths: []string{"main\\.go$"},
+		Rules: []config.ExcludeRule{{BaseRule: config.BaseRule{Path: "main\\.go$"}}},
 	}
 	warmFilter, err := exclusion.NewFilter(warmCfg, dir, nil)
 	if err != nil {
@@ -245,7 +245,7 @@ func TestL0_FilterConfigChangeInvalidatesEntry(t *testing.T) {
 	// caches an empty post-filter entry.
 	suppressCfg := &config.Config{}
 	suppressCfg.Linters.Exclusions = config.LinterExclusions{
-		Paths: []string{".*"},
+		Rules: []config.ExcludeRule{{BaseRule: config.BaseRule{Path: ".*"}}},
 	}
 	suppress, err := exclusion.NewFilter(suppressCfg, dir, nil)
 	if err != nil {
