@@ -30,6 +30,7 @@ type runFlags struct {
 	Disable    csvSlice
 	Enable     csvSlice
 	EnableOnly csvSlice
+	Analyzers  csvSlice
 	FastOnly   bool
 
 	// Run.
@@ -138,6 +139,7 @@ func bindRunFlags(fs *flag.FlagSet) *runFlags {
 	fs.Var(&rf.Enable, "enable", "Enable specific linter (repeatable, comma-separated)")
 	fs.Var(&rf.Enable, "E", "alias for --enable")
 	fs.Var(&rf.EnableOnly, "enable-only", "Override config to only run the specific linter(s)")
+	fs.Var(&rf.Analyzers, "enable-only-analyzer", "Only run the named analysis analyzer(s) (repeatable, comma-separated)")
 	fs.BoolVar(&rf.FastOnly, "fast-only", false, "Filter enabled linters to only fast linters")
 
 	// Run.
