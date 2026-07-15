@@ -1592,7 +1592,17 @@ func (act *action) exec(ctx context.Context) (any, *actionSummary, error) {
 	if hasFacts {
 		// TODO(adonovan): use deterministic order.
 		for _, vdep := range act.vdeps {
-			if summ := vdep.actions[act.stableName]; summ.Err != "" {
+			// vdep.actions[act.stableName] may be nil: the map can be
+			// freed by the D-125 aggressive-release path once its last
+			// consumer decrements, and L0-override / cache-shortcut
+			// summaries need not carry an entry for every facty analyzer.
+			// A nil summary carries no error to propagate, so skip it —
+			// mirroring the guarded read in the fact-decode path below.
+			summ := vdep.actions[act.stableName]
+			if summ == nil {
+				continue
+			}
+			if summ.Err != "" {
 				return nil, nil, errors.New(summ.Err)
 			}
 		}
