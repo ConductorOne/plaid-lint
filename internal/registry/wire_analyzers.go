@@ -349,8 +349,12 @@ func ifaceAnalyzers(cfg any) []*analysis.Analyzer {
 // without an explicit wire stay nil, which is the correct behavior
 // for ShapeRegistryOnly / ShapeSubprocess / ShapeFormatter.
 func wireAnalyzerFns(c *catalog) {
-	wireFn(c, "errcheck", func(_ any) []*analysis.Analyzer {
-		return []*analysis.Analyzer{errcheckAnalyzer()}
+	wireFn(c, "errcheck", func(cfg any) []*analysis.Analyzer {
+		// A nil / wrong-typed cfg falls through as a nil pointer,
+		// which errcheckExclusions treats as zero-valued settings —
+		// i.e. the pre-settings defaults.
+		s, _ := cfg.(*config.ErrcheckSettings)
+		return []*analysis.Analyzer{registerErrcheck(errcheckAnalyzer(s), s)}
 	})
 	wireFn(c, "ineffassign", func(_ any) []*analysis.Analyzer {
 		return []*analysis.Analyzer{ineffassignpass.Analyzer}

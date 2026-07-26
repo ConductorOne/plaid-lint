@@ -13,7 +13,100 @@ import (
 	errcheckpass "github.com/kisielk/errcheck/errcheck"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/conductorone/plaid-lint/internal/analyzers"
+	"github.com/conductorone/plaid-lint/internal/config"
 )
+
+// errcheckExclusions builds the errcheck Exclusions block from the
+// user's `linters.settings.errcheck` stanza, byte-for-byte replicating
+// golangci-lint v2.9.0's `pkg/golinters/errcheck/errcheck.go::getChecker`
+// (verified identical at v2.11.4).
+//
+// The polarity trap: every boolean in errcheck.Exclusions is the
+// INVERSE of the YAML key it comes from. `Exclusions.BlankAssignments`
+// means "EXCLUDE blank assignments from checking", so the user-facing
+// `check-blank: true` maps to `BlankAssignments: false`. The Checker's
+// visitor re-inverts it (errcheck.go::CheckPackage sets
+// `blank: !c.Exclusions.BlankAssignments`). Getting this backwards
+// silently flips two checks for every consumer, so the mapping is
+// spelled out here rather than folded into the struct literal's
+// field order.
+//
+// ExcludeFunctions entries are appended VERBATIM — no parsing,
+// splitting, trimming, or validation. errcheck itself owns the symbol
+// grammar (`io.Copy`, `(*os.File).Close`, `(hash.Hash).Write`, …) and
+// silently ignores names it cannot resolve; pre-validating here would
+// diverge from golangci-lint for anything at the edges of that
+// grammar.
+//
+// SymbolRegexpsByPackage is initialised to an empty non-nil map and
+// never populated: golangci-lint does not expose that knob either, and
+// the Checker dereferences the map unconditionally.
+//
+// A nil settings pointer yields the zero-valued behavior — defaults-only
+// Symbols, BlankAssignments/TypeAssertions both true — which is exactly
+// what the wrapper emitted before the settings were plumbed through.
+func errcheckExclusions(s *config.ErrcheckSettings) errcheckpass.Exclusions {
+	if s == nil {
+		s = &config.ErrcheckSettings{}
+	}
+	ex := errcheckpass.Exclusions{
+		BlankAssignments:       !s.CheckAssignToBlank,
+		TypeAssertions:         !s.CheckTypeAssertions,
+		SymbolRegexpsByPackage: map[string]*regexp.Regexp{},
+	}
+	if !s.DisableDefaultExclusions {
+		ex.Symbols = append(ex.Symbols, errcheckpass.DefaultExcludedSymbols...)
+	}
+	ex.Symbols = append(ex.Symbols, s.ExcludeFunctions...)
+	return ex
+}
+
+// registerErrcheck registers a freshly-built errcheck analyzer pointer
+// against analyzers.BundledRegistry with a settings-derived ConfigSalt,
+// and returns a so the wire fn stays a one-liner.
+//
+// This exists because the L1/L0 cache key folds in
+// `descriptor.ConfigSalt(nil)` (see internal/gopls/cache/l1.go's
+// configSaltFor and its internal/engine/l0.go mirror), and the
+// descriptor is looked up by ANALYZER POINTER
+// (analyzers.Registry.byPtr). bundled.go registers the UPSTREAM
+// `errcheck.Analyzer` pointer, but errcheckAnalyzer() mints a fresh
+// pointer on every AnalyzerFn call — so the lookup missed and every
+// config landed on the same constant fallback salt. Editing
+// `exclude-functions` would then hit a stale L1/L0 entry produced under
+// the old exclusion set.
+//
+// The salt is precomputed from s (not read off the closure's argument)
+// because configSaltFor always calls ConfigSalt(nil); the settings must
+// already be baked into the closure's captured value.
+//
+// TypeUseScope is deliberately left at the zero value
+// (TypeUseFullTypeGraph): errcheck's Run reads pass.TypesInfo and
+// pass.Pkg, so it is NOT syntax-only and must not go through
+// analyzers.RegisterSyntaxOnly.
+//
+// Like RegisterSyntaxOnly, this accumulates one descriptor per fresh
+// analyzer instance over the process lifetime — keyed by its own
+// pointer, so no collisions and no practical leak for batch runs.
+//
+// CacheVersion is 2, one past bundled.go's 1: the emission contract now
+// depends on config, so entries written by a build that ignored the
+// settings must not round-trip into this one.
+func registerErrcheck(a *analysis.Analyzer, s *config.ErrcheckSettings) *analysis.Analyzer {
+	if a == nil {
+		return nil
+	}
+	salt := analyzers.ConfigSalt("errcheck", s)
+	analyzers.BundledRegistry.Register(&analyzers.AnalyzerDescriptor{
+		Analyzer:     a,
+		KeyInputs:    []analyzers.KeyInput{analyzers.KeyInputAllPackageSource},
+		ConfigSalt:   func(any) [32]byte { return salt },
+		CacheVersion: 2,
+	})
+	return a
+}
 
 // errcheckAnalyzer wraps errcheck's library Checker so the emitted
 // diagnostic message matches golangci-lint v2's wrapper —
@@ -33,28 +126,13 @@ import (
 //   - emit `Error return value is not checked` when both are empty
 //     (rare; happens for type-assertion checks).
 //
-// The Checker is constructed with DefaultExcludedSymbols (which
-// already covers fmt.Print* / os.Std* and the rest of the upstream
-// short-list). golangci's wrapper additionally appends config-driven
-// excludes; since plaid has no exposed errcheck settings today, the
-// defaults alone match upstream's default behavior.
-func errcheckAnalyzer() *analysis.Analyzer {
-	// BlankAssignments and TypeAssertions default to TRUE in
-	// Exclusions because the Checker's visitor reads them as the
-	// inverted `blank` / `asserts` flag (errcheck.go::CheckPackage
-	// sets `blank: !c.Exclusions.BlankAssignments`). Leaving both at
-	// the zero value inverts to `blank=true, asserts=true` and reports
-	// every `_ = f()` assignment + every `x.(T)` assertion — which
-	// matches neither the upstream Analyzer default nor golangci-lint's
-	// wrapper (both default to `blank=false, asserts=false`).
-	checker := errcheckpass.Checker{
-		Exclusions: errcheckpass.Exclusions{
-			Symbols:                append([]string(nil), errcheckpass.DefaultExcludedSymbols...),
-			SymbolRegexpsByPackage: map[string]*regexp.Regexp{},
-			BlankAssignments:       true,
-			TypeAssertions:         true,
-		},
-	}
+// The Exclusions block comes from errcheckExclusions(settings), which
+// mirrors golangci's getChecker: DefaultExcludedSymbols (unless
+// `disable-default-exclusions`) plus the user's `exclude-functions`,
+// and the inverted `check-blank` / `check-type-assertions` flags. A nil
+// settings pointer reproduces the pre-settings defaults exactly.
+func errcheckAnalyzer(settings *config.ErrcheckSettings) *analysis.Analyzer {
+	checker := errcheckpass.Checker{Exclusions: errcheckExclusions(settings)}
 
 	return &analysis.Analyzer{
 		Name:       "errcheck",
