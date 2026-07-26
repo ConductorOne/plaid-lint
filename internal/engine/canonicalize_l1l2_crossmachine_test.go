@@ -18,6 +18,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/output"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestL1_CrossMachine is the falsifiable portability gate for
@@ -43,10 +44,7 @@ func TestL1_CrossMachine(t *testing.T) {
 
 	// Machine A: cold pass populates L1 under l1RootA.
 	l1RootA := t.TempDir()
-	l1A, err := clcache.Open(l1RootA)
-	if err != nil {
-		t.Fatalf("open L1 A: %v", err)
-	}
+	l1A := cachetest.Open(t, l1RootA)
 	inA := canonRunInputL1L2(t, src, l1A)
 	resA, err := Run(context.Background(), inA)
 	if err != nil {
@@ -62,10 +60,7 @@ func TestL1_CrossMachine(t *testing.T) {
 	// Copy L1 entries from A to a fresh L1 root B.
 	l1RootB := t.TempDir()
 	copyL0Tree(t, l1RootA, l1RootB)
-	l1B, err := clcache.Open(l1RootB)
-	if err != nil {
-		t.Fatalf("open L1 B: %v", err)
-	}
+	l1B := cachetest.Open(t, l1RootB)
 
 	// Run on machine B with the imported L1 entries. L0 disabled so
 	// the engine must consult L1 to find the diagnostics.
@@ -137,10 +132,7 @@ func TestL2_CrossMachine(t *testing.T) {
 	// Machine A: cold pass populates L2 (and L1, which we won't use
 	// on the warm run).
 	l2RootA := t.TempDir()
-	l2A, err := clcache.Open(l2RootA)
-	if err != nil {
-		t.Fatalf("open L2 A: %v", err)
-	}
+	l2A := cachetest.Open(t, l2RootA)
 	inA := canonRunInputL2(t, src, l2A)
 	resA, err := Run(context.Background(), inA)
 	if err != nil {
@@ -154,10 +146,7 @@ func TestL2_CrossMachine(t *testing.T) {
 	// Copy L2 (typecheck/*) entries from A to a fresh root B.
 	l2RootB := t.TempDir()
 	copyL0Tree(t, l2RootA, l2RootB)
-	l2B, err := clcache.Open(l2RootB)
-	if err != nil {
-		t.Fatalf("open L2 B: %v", err)
-	}
+	l2B := cachetest.Open(t, l2RootB)
 
 	inB := canonRunInputL2(t, machineB, l2B)
 	resB, err := Run(context.Background(), inB)
@@ -212,10 +201,7 @@ func TestL1L2_ActionIDStability(t *testing.T) {
 
 	// Machine A.
 	l1RootA := t.TempDir()
-	l1A, err := clcache.Open(l1RootA)
-	if err != nil {
-		t.Fatalf("open A: %v", err)
-	}
+	l1A := cachetest.Open(t, l1RootA)
 	inA := canonRunInputL1L2(t, src, l1A)
 	if _, err := Run(context.Background(), inA); err != nil {
 		t.Fatalf("Run A: %v", err)
@@ -225,10 +211,7 @@ func TestL1L2_ActionIDStability(t *testing.T) {
 	machineB := buildMachineB(t, src)
 
 	l1RootB := t.TempDir()
-	l1B, err := clcache.Open(l1RootB)
-	if err != nil {
-		t.Fatalf("open B: %v", err)
-	}
+	l1B := cachetest.Open(t, l1RootB)
 	inB := canonRunInputL1L2(t, machineB, l1B)
 	if _, err := Run(context.Background(), inB); err != nil {
 		t.Fatalf("Run B: %v", err)

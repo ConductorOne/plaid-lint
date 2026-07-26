@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/gopls/file"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestL2WiringRoundTrip verifies the typeCheckBatch's L2 hooks store
@@ -22,10 +22,7 @@ import (
 // the original. Counters tick exactly once for each event.
 func TestL2WiringRoundTrip(t *testing.T) {
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 
 	// Build a real *types.Package to round-trip.
 	srcDir := t.TempDir()
@@ -128,10 +125,7 @@ func New() T { return T{} }
 // untouched.
 func TestL2StoreSkipOnExistingEntry(t *testing.T) {
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 	srcDir := t.TempDir()
 	srcPath := filepath.Join(srcDir, "p.go")
 	if err := os.WriteFile(srcPath, []byte(`package p
@@ -235,14 +229,8 @@ func TestL2WiringDisabled(t *testing.T) {
 // TestAttachL2 verifies the Cache-level setter records L2 state and
 // that L2Metrics returns a zero snapshot before any activity.
 func TestAttachL2(t *testing.T) {
-	// PLAID_DISABLE_GC=1 so clcache.Open does not launch a
-	// background GC goroutine that races t.TempDir cleanup.
-	t.Setenv("PLAID_DISABLE_GC", "1")
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 	c := New(nil)
 	c.AttachL2(l2, "linux/amd64/cgo0", "go1.26", "test")
 	if c.l2 != l2 {

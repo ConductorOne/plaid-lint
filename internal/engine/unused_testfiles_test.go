@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestDropTestSupersededPackages asserts the package-set filter that
@@ -116,14 +116,8 @@ func TestRun_UnusedCountsTestFileUsage(t *testing.T) {
 		"import (\n\t\"testing\"\n\n\t\"unusedtest/ext\"\n)\n\n"+
 		"func TestExported(t *testing.T) { _ = ext.Exported() }\n")
 
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 
 	cfg := config.NewDefault()
 	cfg.Linters.Default = config.GroupNone

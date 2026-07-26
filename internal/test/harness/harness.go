@@ -38,6 +38,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/gopls/settings"
 	"github.com/conductorone/plaid-lint/internal/l3"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 	"github.com/conductorone/plaid-lint/internal/workspace"
 )
 
@@ -288,14 +289,8 @@ func AnalyzeOnce(t *testing.T, ctx context.Context, cfg Config) Result {
 		t.Setenv("GOPLSCACHE", cfg.GoplsCacheDir)
 	}
 
-	l1, err := clcache.Open(cfg.L1Dir)
-	if err != nil {
-		t.Fatalf("Open L1 (%s): %v", cfg.L1Dir, err)
-	}
-	l2, err := clcache.Open(cfg.L2Dir)
-	if err != nil {
-		t.Fatalf("Open L2 (%s): %v", cfg.L2Dir, err)
-	}
+	l1 := cachetest.Open(t, cfg.L1Dir)
+	l2 := cachetest.Open(t, cfg.L2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, cfg.ToolVersion)
 	c.AttachL2(l2, cfg.L2BuildEnv, cfg.L2GoVersion, cfg.ToolVersion)

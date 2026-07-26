@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/engine"
 	"github.com/conductorone/plaid-lint/internal/l0"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestInputDigest_W6_Equivalence runs the W6 cold/warm/no-L0 three-way
@@ -36,14 +36,8 @@ func TestInputDigest_W6_Equivalence(t *testing.T) {
 	defer cancel()
 
 	build := func(l0c *l0.Cache) engine.RunInput {
-		l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-		if err != nil {
-			t.Fatalf("open L1: %v", err)
-		}
-		l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-		if err != nil {
-			t.Fatalf("open L2: %v", err)
-		}
+		l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+		l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 		cfg := config.NewDefault()
 		reg, _, err := registry.Build(cfg)
 		if err != nil {
@@ -113,14 +107,8 @@ func TestInputDigest_W6_VerifyMode(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 	cfg := config.NewDefault()
 	reg, _, err := registry.Build(cfg)
 	if err != nil {

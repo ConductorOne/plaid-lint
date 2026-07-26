@@ -76,6 +76,19 @@ type typeCheckBatch struct {
 	importPackages   *futureCache[PackageID, *types.Package] // persistent cache of imports
 	gopackagesdriver bool                                    // for bug reporting: were packages loaded with a driver?
 
+	// storeWG tracks the batch's fire-and-forget cache-write
+	// goroutines: storePackageResults (spawned from
+	// handleSyntaxPackage) and the export-data writer inside
+	// checkPackageForImport. Both outlive the errgroup in query,
+	// which only joins the per-syntax-package goroutines that
+	// *spawn* them — so without this WaitGroup nothing in the
+	// process ever observes their completion.
+	//
+	// Drained once, at batch teardown, by the release closure
+	// acquireTypeChecking returns. See the comment there for why
+	// teardown and not query.
+	storeWG sync.WaitGroup
+
 	// l2 is the optional plaid-lint L2 cache (set when the owning View was
 	// constructed against a Cache that had AttachL2 called). When non-nil
 	// the typeCheckBatch will consult it ahead of gopls's in-process
@@ -448,6 +461,32 @@ func (s *Snapshot) acquireTypeChecking() (*typeCheckBatch, func()) {
 		s.batchRef--
 		if s.batchRef == 0 {
 			s.batch = nil
+			// Join the batch's async cache writers (see storeWG).
+			// Until this lands they can still be writing into the L2
+			// root — and into gopls's filecache — after Analyze has
+			// returned to its caller.
+			//
+			// Not merely test hygiene: run.go closes L1/L2 and lets
+			// the process exit as soon as the run finishes, so an
+			// in-flight export-data write at that moment is silently
+			// dropped and recomputed from scratch next invocation.
+			// Joining makes cache state an observable output of a run
+			// rather than a race against process exit.
+			//
+			// Teardown, not query, on purpose: the batch is
+			// per-Snapshot and refcounted, so this costs one join per
+			// batch and preserves the write concurrency the
+			// "Asynchronously record export data" comment was buying.
+			// Draining inside query would serialize every package's
+			// disk write behind its own type-check.
+			//
+			// Ordered before the ExitLoadPhase below. Both writers are
+			// typesyncmu *readers* (l2StoreWithFiles brackets
+			// IExportShallow in RLock); dropping the global counter to
+			// zero under an in-flight reader degenerates its RLock to
+			// a no-op, and a later batch's gcimporter writer would
+			// then mutate *types.Scope with that read still running.
+			batch.storeWG.Wait()
 			// Matched ExitLoadPhase. The batch is torn down,
 			// so no further typesyncmu.Lock writer can fire on its
 			// behalf — safe to release the global counter claim.
@@ -943,7 +982,11 @@ func (b *typeCheckBatch) getPackage(ctx context.Context, ph *packageHandle) (*Pa
 		}
 
 		// Update caches.
-		go storePackageResults(ctx, b, ph, p) // ...and write all packages to disk
+		b.storeWG.Add(1)
+		go func() { // ...and write all packages to disk
+			defer b.storeWG.Done()
+			storePackageResults(ctx, b, ph, p)
+		}()
 		return p, nil
 	})
 }
@@ -1177,7 +1220,9 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	}
 
 	// Asynchronously record export data.
+	b.storeWG.Add(1)
 	go func() {
+		defer b.storeWG.Done()
 		exportData, err := gcimporter.IExportShallow(b.fset, pkg, bug.Reportf)
 		if err != nil {
 			// Internal error; the stack will have been reported via

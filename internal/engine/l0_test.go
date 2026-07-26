@@ -14,7 +14,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
@@ -22,6 +21,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/output"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // l0Fixture builds a small, self-contained module with one package and
@@ -55,14 +55,8 @@ func main() {
 
 func l0RunInput(t *testing.T, fixture string) (RunInput, *l0.Cache) {
 	t.Helper()
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 	l0c, err := l0.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open L0: %v", err)
@@ -187,8 +181,8 @@ func TestL0_HitSkipsAnalyze(t *testing.T) {
 	// Warm run: install a hook that fails if the driver is invoked at
 	// all. Every package should hit L0.
 	warmIn := in
-	warmIn.L1, _ = clcache.Open(filepath.Join(t.TempDir(), "l1-warm")) // fresh L1 so we don't get false hits
-	warmIn.L2, _ = clcache.Open(filepath.Join(t.TempDir(), "l2-warm"))
+	warmIn.L1 = cachetest.Open(t, filepath.Join(t.TempDir(), "l1-warm")) // fresh L1 so we don't get false hits
+	warmIn.L2 = cachetest.Open(t, filepath.Join(t.TempDir(), "l2-warm"))
 
 	hook := newRecordingHook()
 	SetAnalyzeHookForTest(&warmIn, hook.fn())

@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/gopls/file"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestL2_ShallowEquivalence pins the round-trip semantics of the
@@ -27,10 +27,7 @@ import (
 // equivalent to the source package.
 func TestL2_ShallowEquivalence(t *testing.T) {
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 
 	srcDir := t.TempDir()
 	srcPath := filepath.Join(srcDir, "p.go")
@@ -164,10 +161,7 @@ const (
 // expose the regression.
 func TestL2_CrossPkgCanonicalIdentity(t *testing.T) {
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 
 	srcDir := t.TempDir()
 	dDir := filepath.Join(srcDir, "d")

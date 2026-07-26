@@ -28,9 +28,9 @@ package pipelinetest
 import (
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache"
 	"github.com/conductorone/plaid-lint/internal/l3"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 	"github.com/conductorone/plaid-lint/internal/workspace"
 )
 
@@ -53,14 +53,8 @@ func TestL3IRManagerPinReleaseDuringAnalyze(t *testing.T) {
 
 	mgr := l3.NewSequentialIRManager()
 
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
@@ -111,14 +105,8 @@ func TestL3IRManagerPinsScaleWithPackages(t *testing.T) {
 	const toolVer = "plaid-lint-w8-perpkg"
 
 	mgr := l3.NewSequentialIRManager()
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
@@ -154,14 +142,8 @@ func TestL3IRManagerNoopAttachStillWorks(t *testing.T) {
 	l2Dir := t.TempDir()
 	const toolVer = "plaid-lint-w8-noop"
 
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
@@ -192,14 +174,8 @@ func TestL3IRManagerNilIsDefaultPath(t *testing.T) {
 	l2Dir := t.TempDir()
 	const toolVer = "plaid-lint-w8-nil"
 
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
