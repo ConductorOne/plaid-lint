@@ -158,6 +158,26 @@ func (a *app) runRun(args []string) int {
 		return exitConfigError
 	}
 
+	// Step 4b: apply run.concurrency (--concurrency / -j) to the Go
+	// runtime. Every internal parallelism knob derives from
+	// runtime.GOMAXPROCS(0), read lazily at first use: the analysis
+	// gate's worker cap, the type-checker's cpulimit and the outer
+	// analysis limiter, the parse cache's group limit, the scheduler's
+	// default action cap, and the engine's runner fan-out. None of them
+	// is constructed before this point, so setting GOMAXPROCS here is
+	// the whole of the plumbing — there is no per-subsystem knob to
+	// thread the value through.
+	//
+	// This must stay ahead of the registry build, the exclusion filter,
+	// and runEngine.
+	maxProcs, concurrencyWarn := resolveConcurrency(cfg.Run.Concurrency)
+	if concurrencyWarn != "" {
+		fmt.Fprintf(a.stderr, "plaid-lint: warning: %s\n", concurrencyWarn)
+	}
+	if maxProcs > 0 {
+		runtime.GOMAXPROCS(maxProcs)
+	}
+
 	// Step 5: build registry (T2.3 stub).
 	reg, regWarnings, err := registry.BuildFromConfig(cfg)
 	if err != nil {
@@ -253,6 +273,33 @@ func loadConfig(rf *runFlags) (*config.Config, []config.Warning, string, error) 
 		return nil, nil, "", fmt.Errorf("discover config: %w", err)
 	}
 	return cfg, warns, path, nil
+}
+
+// resolveConcurrency maps an effective `run.concurrency` value (the
+// merge of the YAML block and the --concurrency / -j overlay) onto the
+// GOMAXPROCS setting to apply, matching golangci-lint's semantics for
+// the same flag. The first return is the value to hand
+// runtime.GOMAXPROCS, or 0 for "leave the runtime alone"; the second is
+// a user-facing warning the caller prints, empty when the input is
+// well-formed. Bad input never aborts the run.
+//
+//   - 0 (the default) means auto: the Go runtime's own default governs.
+//     Since Go 1.25 that default is cgroup-aware, so inside a
+//     CPU-limited container it already tracks the quota. The knob
+//     therefore earns its keep mainly for capping BELOW the quota —
+//     e.g. a CI runner sharing cores with other jobs, or trading wall
+//     time for a smaller peak working set.
+//   - N > 0 is applied verbatim.
+//   - N < 0 is meaningless here. runtime.GOMAXPROCS treats a negative
+//     argument as a pure query, so passing it through would silently
+//     do nothing at all. Warn and fall back to auto instead, mirroring
+//     how the sibling PLAID_BUILDIR_DISPATCH_CAP knob handles a
+//     negative value.
+func resolveConcurrency(n int) (int, string) {
+	if n < 0 {
+		return 0, fmt.Sprintf("run.concurrency: %d is negative; treating as unset", n)
+	}
+	return n, ""
 }
 
 // emitDiagnostics prints diags through one or more printers based on
