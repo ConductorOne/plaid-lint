@@ -22,5 +22,11 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
+        # -short skips TestBuildPackageGraph in internal/gopls/cache/typerefs,
+        # which burns ~144s of the test step's ~216s doing a real go/packages
+        # load. It is vendored gopls code, and upstream wrote the
+        # testing.Short() guard for precisely this case ("loading the packages
+        # can take a long time with a cold cache") — a 2-core runner is that
+        # case. None of the tests that have actually flaked in CI are skipped.
         run: |
-          go test -p 1 $(go list ./... | grep -Ev '/internal/gopls/internal/(expect|gcimporter|imports)$')
+          go test -short -p 1 $(go list ./... | grep -Ev '/internal/gopls/internal/(expect|gcimporter|imports)$')
