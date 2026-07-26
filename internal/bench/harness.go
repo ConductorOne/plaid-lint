@@ -368,10 +368,15 @@ func Run(ctx context.Context, cfg Config) (*BenchmarkResult, error) {
 	}
 
 	// L1/L2 cache instances are shared across scenarios so warm and
-	// cascade can see the cold scenario's stores. The clcache.Cache
-	// has no Close method — the underlying flat-file store is
-	// fsync'd on every write — so the only cleanup is RemoveAll on
-	// the directory, which the defer above handles.
+	// cascade can see the cold scenario's stores. Directory cleanup is
+	// the RemoveAll defer above. These handles are deliberately not
+	// routed through internal/test/cachetest: Run has no testing.TB to
+	// hang a Cleanup on, and its dirs are MkdirTemp rather than
+	// t.TempDir, so a straggling GC write cannot fail a test.
+	//
+	// TODO: these handles are never Closed. Harmless for the local
+	// backend, but the gocacheprog backend leaks a helper subprocess
+	// per Run.
 	l1, err := clcache.Open(l1Dir)
 	if err != nil {
 		return nil, fmt.Errorf("Open L1: %w", err)

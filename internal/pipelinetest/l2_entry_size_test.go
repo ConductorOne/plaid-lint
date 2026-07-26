@@ -35,8 +35,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 	"github.com/conductorone/plaid-lint/internal/workspace"
 )
 
@@ -147,14 +147,8 @@ func TestL2EntrySizeBounded(t *testing.T) {
 	const toolVer = "plaid-lint-l2size-test"
 
 	// Cold run only; we want to measure what cold stored.
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c := cache.New(nil)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)

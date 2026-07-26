@@ -12,27 +12,21 @@ import (
 	"testing"
 	"time"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/engine"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache"
 	"github.com/conductorone/plaid-lint/internal/l0"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // buildFactsInput returns a fresh engine.RunInput with new L1/L2;
 // callers control L0 reuse for cold/warm staging.
 func buildFactsInput(t *testing.T, moduleRoot string, l0c *l0.Cache) engine.RunInput {
 	t.Helper()
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 	cfg := config.NewDefault()
 	reg, _, err := registry.Build(cfg)
 	if err != nil {

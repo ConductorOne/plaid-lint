@@ -18,6 +18,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/output"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestRun_RejectsMissingInputs surfaces a clear error for each of
@@ -161,14 +162,8 @@ func mustInput(t *testing.T) RunInput {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o600); err != nil {
 		t.Fatalf("write main.go: %v", err)
 	}
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 	cfg := config.NewDefault()
 	reg, _, err := registry.Build(cfg)
 	if err != nil {
@@ -216,14 +211,8 @@ func TestRun_TargetPatternsNarrowsWorkspaceLoad(t *testing.T) {
 	mustWrite("b/b.go", "package b\n\nfunc G() int { return 0 }\n")
 
 	build := func(patterns []string) RunInput {
-		l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-		if err != nil {
-			t.Fatalf("open L1: %v", err)
-		}
-		l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-		if err != nil {
-			t.Fatalf("open L2: %v", err)
-		}
+		l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+		l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 		cfg := config.NewDefault()
 		reg, _, err := registry.Build(cfg)
 		if err != nil {

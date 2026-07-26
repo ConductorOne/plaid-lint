@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/canonicalpath"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/gopls/protocol"
@@ -20,6 +19,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/output"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // canonicalFixture builds a tiny module whose default-analyzer run
@@ -59,14 +59,8 @@ func main() {
 // with no exclusion filter (we want diagnostics to flow through).
 func canonRunInput(t *testing.T, fixture string, l0c *l0.Cache) RunInput {
 	t.Helper()
-	l1, err := clcache.Open(filepath.Join(t.TempDir(), "l1"))
-	if err != nil {
-		t.Fatalf("open L1: %v", err)
-	}
-	l2, err := clcache.Open(filepath.Join(t.TempDir(), "l2"))
-	if err != nil {
-		t.Fatalf("open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, filepath.Join(t.TempDir(), "l1"))
+	l2 := cachetest.Open(t, filepath.Join(t.TempDir(), "l2"))
 	cfg := config.NewDefault()
 	reg, _, err := registry.Build(cfg)
 	if err != nil {

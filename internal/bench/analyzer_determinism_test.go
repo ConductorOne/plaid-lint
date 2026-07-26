@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/engine"
 	"github.com/conductorone/plaid-lint/internal/l0"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/subproc"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestAnalyzerDeterminism_NRepeats is the runtime determinism gate
@@ -70,16 +70,8 @@ func TestAnalyzerDeterminism_NRepeats(t *testing.T) {
 		l1Root := filepath.Join(t.TempDir(), "l1")
 		l2Root := filepath.Join(t.TempDir(), "l2")
 		l0Root := t.TempDir()
-		l1c, err := clcache.Open(l1Root)
-		if err != nil {
-			cancel()
-			t.Fatalf("run %d: open L1: %v", i, err)
-		}
-		l2c, err := clcache.Open(l2Root)
-		if err != nil {
-			cancel()
-			t.Fatalf("run %d: open L2: %v", i, err)
-		}
+		l1c := cachetest.Open(t, l1Root)
+		l2c := cachetest.Open(t, l2Root)
 		l0c, err := l0.Open(l0Root)
 		if err != nil {
 			cancel()

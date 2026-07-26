@@ -36,8 +36,9 @@ import (
 // caches.
 //
 // The caller owns the L1/L2 cache lifecycle: engine.Run does NOT
-// close them (the underlying clcache.Cache has no Close anyway —
-// the on-disk store is fsync'd per write).
+// close them. clcache.Cache.Close exists and must be called by the
+// caller once it is done with the handle; Run leaves both open so a
+// caller can reuse them across invocations.
 type RunInput struct {
 	// Config is the parsed + validated config. Required.
 	Config *config.Config

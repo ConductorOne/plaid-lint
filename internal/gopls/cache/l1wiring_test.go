@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/gopls/file"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // fakeAnalyzer returns a minimal *analysis.Analyzer suitable for L1
@@ -141,10 +141,7 @@ func TestL1ActionIDVdepFactsSensitive(t *testing.T) {
 // look it up and verify the cached diagnostics + facts round-trip.
 func TestL1WiringRoundTrip(t *testing.T) {
 	cacheDir := t.TempDir()
-	l1, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
+	l1 := cachetest.Open(t, cacheDir)
 
 	metrics := &l1Metrics{}
 	b := &typeCheckBatch{
@@ -208,10 +205,7 @@ func TestL1WiringRoundTrip(t *testing.T) {
 // entry untouched.
 func TestL1StoreSkipOnExistingEntry(t *testing.T) {
 	cacheDir := t.TempDir()
-	l1, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
+	l1 := cachetest.Open(t, cacheDir)
 
 	metrics := &l1Metrics{}
 	b := &typeCheckBatch{
@@ -282,14 +276,8 @@ func TestL1WiringDisabled(t *testing.T) {
 // TestAttachL1 — Cache-level setter records L1 state and L1Metrics
 // returns a zero snapshot before any activity.
 func TestAttachL1(t *testing.T) {
-	// PLAID_DISABLE_GC=1 so clcache.Open does not launch a
-	// background GC goroutine that races t.TempDir cleanup.
-	t.Setenv("PLAID_DISABLE_GC", "1")
 	cacheDir := t.TempDir()
-	l1, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
+	l1 := cachetest.Open(t, cacheDir)
 	c := New(nil)
 	c.AttachL1(l1, "plaid-lint-test")
 	if c.l1 != l1 {
@@ -306,14 +294,8 @@ func TestAttachL1(t *testing.T) {
 
 // TestAttachL1AfterViewPanics — like AttachL2, AttachL1 is setup-time-only.
 func TestAttachL1AfterViewPanics(t *testing.T) {
-	// PLAID_DISABLE_GC=1 so clcache.Open does not launch a
-	// background GC goroutine that races t.TempDir cleanup.
-	t.Setenv("PLAID_DISABLE_GC", "1")
 	cacheDir := t.TempDir()
-	l1, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
+	l1 := cachetest.Open(t, cacheDir)
 	c := New(nil)
 	// Simulate a View having been created.
 	c.viewCount.Add(1)

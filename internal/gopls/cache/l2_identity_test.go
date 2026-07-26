@@ -15,6 +15,7 @@ import (
 	"github.com/conductorone/plaid-lint/internal/gopls/cache/metadata"
 	"github.com/conductorone/plaid-lint/internal/gopls/file"
 	"github.com/conductorone/plaid-lint/internal/gopls/internal/gcimporter"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 )
 
 // TestL2SharedImportIdentity is the cross-flow identity regression
@@ -48,10 +49,7 @@ import (
 //     pkgb.TakeToken. This is the load-bearing invariant.
 func TestL2SharedImportIdentity(t *testing.T) {
 	cacheDir := t.TempDir()
-	l2, err := clcache.Open(cacheDir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l2 := cachetest.Open(t, cacheDir)
 
 	// --- Build pkgc, pkga, pkgb. ---
 	srcDir := t.TempDir()

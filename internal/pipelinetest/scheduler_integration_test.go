@@ -36,10 +36,10 @@ package pipelinetest
 import (
 	"testing"
 
-	clcache "github.com/conductorone/plaid-lint/internal/cache"
 	"github.com/conductorone/plaid-lint/internal/gopls/cache"
 	"github.com/conductorone/plaid-lint/internal/l3"
 	"github.com/conductorone/plaid-lint/internal/scheduler"
+	"github.com/conductorone/plaid-lint/internal/test/cachetest"
 	"github.com/conductorone/plaid-lint/internal/workspace"
 )
 
@@ -64,14 +64,8 @@ func TestSchedulerIntegration_SABatchEquivalence(t *testing.T) {
 
 	runBaseline := func(t *testing.T) (map[string][]canonicalDiag, int64) {
 		t.Helper()
-		l1, err := clcache.Open(baselineL1)
-		if err != nil {
-			t.Fatalf("Open L1: %v", err)
-		}
-		l2, err := clcache.Open(baselineL2)
-		if err != nil {
-			t.Fatalf("Open L2: %v", err)
-		}
+		l1 := cachetest.Open(t, baselineL1)
+		l2 := cachetest.Open(t, baselineL2)
 		c := cache.New(nil)
 		c.AttachL1(l1, toolVer)
 		c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
@@ -112,14 +106,8 @@ func TestSchedulerIntegration_SABatchEquivalence(t *testing.T) {
 
 	rss := scheduler.NewRSSBudgetScheduler(schedBudget, schedMaxConc)
 	c := cache.New(nil)
-	l1, err := clcache.Open(scheduledL1)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(scheduledL2)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, scheduledL1)
+	l2 := cachetest.Open(t, scheduledL2)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
 	c.AttachScheduler(scheduler.AsCacheScheduler(rss))
@@ -202,14 +190,8 @@ func TestSchedulerIntegration_DefaultPathUnchanged(t *testing.T) {
 	const toolVer = "plaid-lint-w9-default-path"
 
 	c := cache.New(nil)
-	l1, err := clcache.Open(l1Dir)
-	if err != nil {
-		t.Fatalf("Open L1: %v", err)
-	}
-	l2, err := clcache.Open(l2Dir)
-	if err != nil {
-		t.Fatalf("Open L2: %v", err)
-	}
+	l1 := cachetest.Open(t, l1Dir)
+	l2 := cachetest.Open(t, l2Dir)
 	c.AttachL1(l1, toolVer)
 	c.AttachL2(l2, "linux/arm64/cgo0", "go1.22", toolVer)
 	mgr := l3.NewSequentialIRManager()
