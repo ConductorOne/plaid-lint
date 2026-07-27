@@ -306,6 +306,11 @@ type budgetGate struct {
 	cond     *sync.Cond
 	inFlight uint64 // count of currently-acquired actions
 	bytes    uint64 // sum of RSSEstimate across in-flight actions
+	// waiting is the number of acquire calls currently parked in
+	// cond.Wait. It is the gate's contention observable: a test
+	// can block until it reaches a known value and thereby know,
+	// without sleeping, that every waiter really is at the gate.
+	waiting uint64
 }
 
 func newBudgetGate(budgetBytes uint64, maxConcurrency uint64) *budgetGate {
@@ -365,8 +370,18 @@ func (g *budgetGate) acquire(ctx context.Context, want uint64) (admitted bool, b
 			return true, wasBlocked, g.inFlight, nil
 		}
 		wasBlocked = true
+		g.waiting++
 		g.cond.Wait()
+		g.waiting--
 	}
+}
+
+// waiters returns the number of acquire calls currently parked in
+// cond.Wait.
+func (g *budgetGate) waiters() uint64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.waiting
 }
 
 // release returns a slot. The caller is responsible for matching
