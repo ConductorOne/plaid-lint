@@ -539,7 +539,7 @@ func TestFilter_UniqByLine(t *testing.T) {
 // github.com/sonatard/noctx v0.5.0+ adds a rule for
 // `net/http/httptest.NewRequest`. golangci-lint v2.9 pins v0.4.0 which
 // doesn't have that rule. Plaid pins v0.5.1 so it emits 10 such
-// diagnostics on c1's pkg/api/ssf_receiver/push_handler_test.go that
+// diagnostics on a real-world httptest-heavy test file that
 // golangci-lint silently skips; without the library-version-skew
 // filter we surface diagnostics upstream doesn't.
 func TestFilter_NoctxHttptestSkewDropped(t *testing.T) {
@@ -570,7 +570,7 @@ func TestFilter_NoctxHttptestSkewDropped(t *testing.T) {
 
 // TestFilter_RuleGovetAlias pins the fix: a path-rule scoping
 // `linters: [govet]` must cover diagnostics emitted by govet
-// sub-analyzers (copylocks, printf, ...). Without the alias, a c1-style
+// sub-analyzers (copylocks, printf, ...). Without the alias, a typical
 // `path: _test\.go` rule targeting `govet` doesn't suppress
 // sub-analyzer diagnostics in test files.
 func TestFilter_RuleGovetAlias(t *testing.T) {

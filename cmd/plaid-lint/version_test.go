@@ -50,12 +50,12 @@ func TestResolveVersion_BuildInfoFillsCommit(t *testing.T) {
 	}
 }
 
-// TestResolveVersion_BuildInfoFillsVersion pins the c1-load-bearing
-// case: a `go install github.com/.../plaid-lint@<sha>` build doesn't
-// pass -ldflags so the version global stays at "v0-dev", but the
-// embedded build info has info.Main.Version set to a real pseudo-version
-// (e.g. v0.0.0-20260527014220-0eeffd7b9f9f). The fallback must use that
-// pseudo-version so c1's Makefile pin guard can match against it.
+// TestResolveVersion_BuildInfoFillsVersion pins the case downstream
+// consumers depend on: a `go install github.com/.../plaid-lint@<sha>`
+// build doesn't pass -ldflags so the version global stays at
+// "v0-dev", but the embedded build info has info.Main.Version set to a
+// real pseudo-version (e.g. v0.0.0-20260527014220-0eeffd7b9f9f). The fallback must use that
+// pseudo-version so a downstream Makefile pin guard can match it.
 //
 // Under `go test -buildvcs=true` the test binary has the same shape
 // (pseudo-version + dirty marker), which is enough to exercise the
@@ -72,8 +72,8 @@ func TestResolveVersion_BuildInfoFillsVersion(t *testing.T) {
 	}
 	// Don't pin the exact value (varies by test runner / commit state);
 	// just confirm the fallback fired and produced something that
-	// looks like a version string the c1 Makefile pin guard could
-	// grep for.
+	// looks like a version string a downstream Makefile pin guard
+	// could grep for.
 	if len(v.Version) < 5 {
 		t.Errorf("Version: got %q (suspiciously short)", v.Version)
 	}

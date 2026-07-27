@@ -592,8 +592,8 @@ func compileExcludeRule(r *config.ExcludeRule) (compiledRule, error) {
 // match (AND semantics, matching upstream).
 //
 // Note: source-line matching is not implemented; rules that set only
-// `source:` will never fire. c1's config does not use source rules, so
-// this is acceptable for parity on the c1 corpus.
+// `source:` will never fire. The reference monorepo's config does not
+// use source rules, so this is acceptable for parity on that corpus.
 func (r compiledRule) match(d output.Diagnostic, rel string) bool {
 	if r.empty() {
 		return false
@@ -635,8 +635,8 @@ func (r compiledRule) empty() bool {
 // the staticcheck family (ST/SA/QF/S → "staticcheck") and the govet
 // sub-analyzer set (copylocks/printf/... → "govet"). Without these
 // aliases the `comments` preset wouldn't drop ST1000 / ST1020, and
-// c1's `_test\.go` rule scoping `govet` wouldn't cover sub-analyzer
-// diagnostics like copylocks.
+// a real-world `_test\.go` rule scoping `govet` wouldn't cover
+// sub-analyzer diagnostics like copylocks.
 func matchLinterName(selectors map[string]struct{}, diagLinter string) bool {
 	if _, ok := selectors[diagLinter]; ok {
 		return true

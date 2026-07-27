@@ -146,7 +146,7 @@ func TestHarness_ExcludeAllPackagesIsError(t *testing.T) {
 	}
 }
 
-// TestHarness_ExcludeSubdirPackages exercises the c1-shaped workspace:
+// TestHarness_ExcludeSubdirPackages exercises the monorepo-shaped workspace:
 // one go.mod at the fixture root, multiple workspace packages under
 // distinct subdirectories. This is the shape LEARN-FGL-003 surfaced
 // as broken in the original implementation, where ShouldExcludePackage

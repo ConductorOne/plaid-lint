@@ -30,7 +30,7 @@ import (
 // apkg.compiles to false and silently dropped every analyzer's
 // diagnostics for the consuming package. The bug fired
 // intermittently under GC + CPU pressure on smaller workspaces; on
-// c1-scale it fires deterministically.
+// monorepo-scale workspaces it fires deterministically.
 //
 // This test asserts the canonicalization invariant the fix relies on:
 // the *types.Package returned by clcache.ReadExportData against a

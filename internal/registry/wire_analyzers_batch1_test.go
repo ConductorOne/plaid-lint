@@ -193,13 +193,13 @@ func TestBatch1_Predeclared_AppliesFlags(t *testing.T) {
 	}
 }
 
-// TestBatch1_C1EnableSet covers c1's real-world long-tail set: every
-// batch1 linter is enabled in c1's .golangci.yml. Confirms the
-// wirings answer c1's bottleneck.
-func TestBatch1_C1EnableSet(t *testing.T) {
-	c1Enables := []string{
-		// c1's full linters.enable list; we only check that the
-		// batch1 members all resolve cleanly here.
+// TestBatch1_RealWorldEnableSet covers a real-world long-tail set:
+// every batch1 linter is enabled in the reference monorepo's
+// .golangci.yml. Confirms the wirings answer that bottleneck.
+func TestBatch1_RealWorldEnableSet(t *testing.T) {
+	realWorldEnables := []string{
+		// The reference monorepo's full linters.enable list; we only
+		// check that the batch1 members all resolve cleanly here.
 		"asasalint", "asciicheck", "bidichk", "bodyclose", "depguard",
 		"durationcheck", "errcheck", "errorlint", "exhaustive",
 		"forbidigo", "gochecknoinits", "goconst", "gocritic",
@@ -212,7 +212,7 @@ func TestBatch1_C1EnableSet(t *testing.T) {
 
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"
-	cfg.Linters.Enable = c1Enables
+	cfg.Linters.Enable = realWorldEnables
 
 	reg, _, err := Build(cfg)
 	if err != nil {
@@ -224,21 +224,22 @@ func TestBatch1_C1EnableSet(t *testing.T) {
 		enabled[r.Name] = true
 	}
 
-	// Most batch1 linters are c1-enabled; gocheckcompilerdirectives
-	// is in the batch for broad corpus coverage rather than c1
-	// fit. Assert the intersection is non-trivial.
-	var c1Hits int
-	c1Set := map[string]bool{}
-	for _, n := range c1Enables {
-		c1Set[n] = true
+	// Most batch1 linters are enabled in the reference set;
+	// gocheckcompilerdirectives is in the batch for broad corpus
+	// coverage rather than reference-set fit. Assert the intersection
+	// is non-trivial.
+	var hits int
+	refSet := map[string]bool{}
+	for _, n := range realWorldEnables {
+		refSet[n] = true
 	}
 	for _, name := range batch1Linters {
-		if c1Set[name] && enabled[name] {
-			c1Hits++
+		if refSet[name] && enabled[name] {
+			hits++
 		}
 	}
-	if c1Hits < 10 {
-		t.Errorf("c1 enable set: batch1 ∩ c1 = %d hits, want >= 10 (batch was selected to bias c1)", c1Hits)
+	if hits < 10 {
+		t.Errorf("reference enable set: batch1 ∩ reference = %d hits, want >= 10 (batch was selected to bias the reference set)", hits)
 	}
 }
 

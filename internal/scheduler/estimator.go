@@ -27,7 +27,7 @@ var goMaxProcs = func() int { return runtime.GOMAXPROCS(0) }
 // lookup table indexed by the analyzer's NeedsIR bit, augmented
 // with a sliding-window median once ≥10 samples are recorded via
 // Observe. The W10 benchmark phase replaces the table with
-// empirically-measured values from the c1 perf suite; the
+// empirically-measured values from the large-monorepo perf suite; the
 // interface lets the swap happen without touching the scheduler.
 type RSSEstimator interface {
 	// Estimate returns the projected resident-set in bytes for
@@ -47,7 +47,7 @@ type RSSEstimator interface {
 // over per-(NeedsIR) buckets. The W10 benchmark phase will refine
 // the table; the W9 numbers are an order-of-magnitude estimate
 // drawn from the bottleneck synthesis (typical SA-* analyzer on
-// a c1-sized package consumes 30-60 MB peak RSS when it
+// a monorepo-sized package consumes 30-60 MB peak RSS when it
 // constructs IR, and 5-10 MB when it does not).
 //
 // The estimator is concurrency-safe.
@@ -68,12 +68,12 @@ type DefaultEstimator struct {
 // 102-analyzer workload.
 // Pre-W10 values were 8 MB / 48 MB, a pure hand-waving guess; the
 // W10 numbers are still rough (sample size is thousands of actions
-// on synthetic fixtures, not c1-scale), but they are grounded in
+// on synthetic fixtures, not monorepo-scale), but they are grounded in
 // measurement rather than back-of-envelope.
 //
 // observationsBeforeMedian remains 10: the sliding-window median
 // takes over once each bucket has accumulated ten samples.
-// maxWindowSamples remains 128: the largest c1-scale closure is
+// maxWindowSamples remains 128: the largest monorepo-scale closure is
 // ~3000 packages × ~30 NeedsIR analyzers = ~90 k actions; a
 // 128-sample window covers ~0.14% of the run, which is the
 // "responsive to recent shape change but not jittery" sweet spot.
@@ -98,7 +98,7 @@ const (
 	// peaks for IR-bearing actions are bounded by ~5.5 MB on
 	// bench_medium / ~3.4 MB on bench_small — well below 64 MB.
 	// We keep the higher number; synthetic VmHWM under-
-	// reports c1-scale, and the 30-60 MB IR-action upper estimate
+	// reports monorepo-scale, and the 30-60 MB IR-action upper estimate
 	// remains the better bound for the gate's first ~10 actions.
 	StaticEstimateIRBytes uint64 = 64 * 1024 * 1024
 

@@ -512,7 +512,7 @@ func TestGovetAnalyzers_EnableAll(t *testing.T) {
 }
 
 // TestTracecheck_NativeWired pins tracecheck's wiring post-vendor:
-// the analyzer source was imported from github.com/ductone/ci-tools
+// the analyzer source was imported from an internal CI-tooling repo
 // into internal/analyzers/tracecheck and registered via
 // wire_analyzers_tracecheck.go. The shape flipped from ShapeSubprocess
 // to ShapeNative, so an Analyzer is now attached and tracecheck

@@ -40,7 +40,7 @@ import (
 //
 // Message format: `<kind> <name> is unused` — same stem the subproc
 // wrapper canonicalized (`func F is unused`, `var X is unused`),
-// preserving c1's exclusion-rule parity.
+// preserving downstream exclusion-rule parity.
 func wireAnalyzerFnsUnusedNative(c *catalog) {
 	wireNativeFn(c, "unused", func(cfg any) []*analysis.Analyzer {
 		s, _ := cfg.(*config.UnusedSettings)
@@ -94,7 +94,7 @@ func runUnused(pass *analysis.Pass, s *config.UnusedSettings) (any, error) {
 	// Per-pass key + filename→*token.File index, so the
 	// used-set lookup and the unusedPos resolution don't allocate a
 	// Sprintf-built string per object or O(file-count) Iterate per
-	// finding. With ~1500 packages in c1's controller workspace, the
+	// finding. With ~1500 packages in a monorepo controller workspace, the
 	// per-Object map key + per-finding Iterate add up to a measurable
 	// share of unused.Graph's wrapper-level cost (profiling attributed
 	// 8.70% of cold CPU to the unused walk).

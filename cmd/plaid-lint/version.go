@@ -47,8 +47,8 @@ func resolveVersion() versionInfo {
 	// Fall back to the embedded module pseudo-version when -ldflags
 	// didn't pin Version. info.Main.Version is "(devel)" for `go run`
 	// / in-tree builds and a v0.0.0-<timestamp>-<sha> pseudo-version
-	// for `go install <pkg>@<rev>` installs — the case c1's Makefile
-	// pin guard depends on.
+	// for `go install <pkg>@<rev>` installs — the case a downstream
+	// Makefile pin guard depends on.
 	if (v.Version == "v0-dev" || v.Version == "") &&
 		info.Main.Version != "" && info.Main.Version != "(devel)" {
 		v.Version = info.Main.Version

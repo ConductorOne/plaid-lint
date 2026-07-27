@@ -20,12 +20,13 @@ type BenchmarkResult struct {
 	Schema int `json:"schema"`
 
 	// Fixture is the absolute path of the fixture the harness ran
-	// against. Useful for traceability across machines.
+	// against. Useful for traceability across machines. Artifacts
+	// committed under bench/ have this relativized to the repo root.
 	Fixture string `json:"fixture"`
 
 	// FixtureShape is the descriptor identifying which synthetic
 	// shape this fixture came from. Empty for external fixtures
-	// (the gate-decision c1 run).
+	// (the gate-decision monorepo run).
 	FixtureShape string `json:"fixture_shape,omitempty"`
 
 	// ObservationSource is the [scheduler.Sampler.Name] of the
@@ -163,8 +164,8 @@ type BenchmarkResult struct {
 	// residency. The delta (PeakRSSBytes − IdleRSSBytes) is mostly
 	// HeapIdle − HeapReleased waiting on madvise reclaim.
 	//
-	// On c1 at end-of-Run: PeakRSSBytes ≈ 23–32 GiB, IdleRSSBytes
-	// ≈ 0.5–1 GiB. The gap is what prompted this field.
+	// On a large monorepo at end-of-Run: PeakRSSBytes ≈ 23–32 GiB,
+	// IdleRSSBytes ≈ 0.5–1 GiB. The gap is what prompted this field.
 	//
 	// Zero on non-Linux or when /proc/self/status is unreadable.
 	IdleRSSBytes int64 `json:"idle_rss_bytes"`

@@ -169,7 +169,7 @@ func seedRows() []seedRow {
 		{name: "testpackage", shape: ShapeNative},          // batch4
 		{name: "thelper", shape: ShapeNative},              // batch6
 		{name: "tparallel", shape: ShapeNative},            // batch1
-		{name: "tracecheck", shape: ShapeNative},           // wire_analyzers_tracecheck.go — vendored from github.com/ductone/ci-tools
+		{name: "tracecheck", shape: ShapeNative},           // wire_analyzers_tracecheck.go — vendored from an internal CI-tooling repo
 
 		// typecheck — engine-internal; the parser/type-checker emits
 		// its diagnostics directly. Registered as ShapeNative with no

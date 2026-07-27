@@ -212,9 +212,8 @@ func TestNolintFilter_NilReceiver(t *testing.T) {
 // TestNolintFilter_GovetFamilyAlias pins the fix: a
 // `//nolint:govet` directive must suppress diagnostics emitted by any
 // govet sub-analyzer (copylocks, printf, shift, ...). Without the
-// alias, c1's `//nolint:govet // Because we need to` directives in
-// pkg/controller/app/controller/entitlement_proxy_binding_test.go don't
-// cover the copylocks sub-analyzer that fires on the next-line
+// alias, real-world `//nolint:govet // Because we need to` directives
+// don't cover the copylocks sub-analyzer that fires on the next-line
 // MessageState-bearing struct copy.
 func TestNolintFilter_GovetFamilyAlias(t *testing.T) {
 	const src = `package x

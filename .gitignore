@@ -10,6 +10,6 @@
 /tmp/
 .DS_Store
 
-# Cached helper binary built by scripts/compare-against-c1.sh
+# Cached helper binary built by scripts/compare-against-monorepo.sh
 /cmd/strip-tracecheck-config/strip-tracecheck-config
 /vendor/

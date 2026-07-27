@@ -19,9 +19,9 @@ func TestCanonicalize(t *testing.T) {
 	}{
 		{
 			name:    "workspace file",
-			absPath: "/data/squire/src/c1/pkg/foo/bar.go",
-			pkgPath: "github.com/conductorone/c1/pkg/foo",
-			want:    "github.com/conductorone/c1/pkg/foo/bar.go",
+			absPath: "/home/dev/src/monorepo/pkg/foo/bar.go",
+			pkgPath: "example.com/monorepo/pkg/foo",
+			want:    "example.com/monorepo/pkg/foo/bar.go",
 		},
 		{
 			name:    "stdlib",
@@ -31,15 +31,15 @@ func TestCanonicalize(t *testing.T) {
 		},
 		{
 			name:    "test file",
-			absPath: "/data/squire/src/c1/pkg/foo/bar_test.go",
-			pkgPath: "github.com/conductorone/c1/pkg/foo",
-			want:    "github.com/conductorone/c1/pkg/foo/bar_test.go",
+			absPath: "/home/dev/src/monorepo/pkg/foo/bar_test.go",
+			pkgPath: "example.com/monorepo/pkg/foo",
+			want:    "example.com/monorepo/pkg/foo/bar_test.go",
 		},
 		{
 			name:    "external test package",
-			absPath: "/data/squire/src/c1/pkg/foo/bar_external_test.go",
-			pkgPath: "github.com/conductorone/c1/pkg/foo_test",
-			want:    "github.com/conductorone/c1/pkg/foo_test/bar_external_test.go",
+			absPath: "/home/dev/src/monorepo/pkg/foo/bar_external_test.go",
+			pkgPath: "example.com/monorepo/pkg/foo_test",
+			want:    "example.com/monorepo/pkg/foo_test/bar_external_test.go",
 		},
 		{
 			name:    "cgo generated",

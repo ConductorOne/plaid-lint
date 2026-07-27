@@ -2,21 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package tracecheck vendors c1's tracecheck analyzer for native
-// integration into plaid-lint.
+// Package tracecheck vendors the tracecheck analyzer from a private
+// internal CI-tooling repository for native integration into
+// plaid-lint.
 //
-// Upstream: github.com/ductone/ci-tools/src/tracecheck (module path
-// `gitlab.com/ductone/tracecheck`). The upstream ships as a Go plugin
-// (.so loaded via `plugin.Open`) consumed by golangci-lint at runtime.
-// Plugin loading requires byte-identical Go toolchain + transitive
-// package versions between the .so and the loader, which is fragile in
-// practice. Vendoring the source as a native analyzer avoids that
-// constraint and lets plaid-lint's analyzer-set treat tracecheck the
-// same way it treats every other wired analyzer.
+// Upstream ships tracecheck as a Go plugin (.so loaded via
+// `plugin.Open`) consumed by golangci-lint at runtime. Plugin loading
+// requires byte-identical Go toolchain + transitive package versions
+// between the .so and the loader, which is fragile in practice.
+// Vendoring the source as a native analyzer avoids that constraint and
+// lets plaid-lint's analyzer-set treat tracecheck the same way it
+// treats every other wired analyzer.
 //
-// Maintenance: when upstream tracecheck changes, re-sync this file
-// from github.com/ductone/ci-tools/src/tracecheck/tracecheck.go.
-// Behavior must match upstream verbatim — the testdata fixture under
+// Maintenance: when upstream tracecheck changes, re-sync this file from
+// the internal CI-tooling repository's tracecheck source. Behavior must
+// match upstream verbatim — the testdata fixture under
 // testdata/src/trace/ pins the diagnostic surface.
 package tracecheck
 

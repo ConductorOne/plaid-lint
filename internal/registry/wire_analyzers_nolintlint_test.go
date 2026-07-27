@@ -208,7 +208,7 @@ var _ = 3 //nolint:errcheck // why
 }
 
 // TestNolintlint_BuildEnableSet covers the Build path: enabling
-// `nolintlint` with c1-shaped settings yields a non-nil Analyzer.
+// `nolintlint` with real-world-shaped settings yields a non-nil Analyzer.
 func TestNolintlint_BuildEnableSet(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"

@@ -10,7 +10,7 @@ import "testing"
 // discrimination that scopesForPatterns relies on. The bug this
 // guards against: bare patterns like "pkg/foo" without a `./`
 // prefix are interpreted by `go list` as import-path patterns
-// (in c1's case `gitlab.com/ductone/c1/pkg/foo`), which fail to
+// (e.g. `gitlab.com/example/monorepo/pkg/foo`), which fail to
 // resolve in single-module repos whose import root doesn't match
 // the working directory. packages.Load then returns a synthetic
 // placeholder with no GoFiles, the loader drops it, and the
@@ -36,7 +36,7 @@ func TestNormalizePackagePattern(t *testing.T) {
 
 		// Import paths (dot in first segment) pass through.
 		{"import-github", "github.com/foo/bar", "github.com/foo/bar"},
-		{"import-gitlab", "gitlab.com/ductone/c1/pkg/foo", "gitlab.com/ductone/c1/pkg/foo"},
+		{"import-gitlab", "gitlab.com/example/monorepo/pkg/foo", "gitlab.com/example/monorepo/pkg/foo"},
 		{"import-gopkg", "gopkg.in/yaml.v3", "gopkg.in/yaml.v3"},
 		{"import-recursive", "github.com/foo/bar/...", "github.com/foo/bar/..."},
 

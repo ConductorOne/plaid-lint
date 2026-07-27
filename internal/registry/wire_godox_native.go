@@ -28,7 +28,7 @@ var godoxDefaultKeywords = []string{"TODO", "BUG", "FIXME"}
 // token.Position back to a token.Pos.
 //
 // Message format: the library returns "Line N: KEYWORD(... )" stems
-// matching golangci-lint's own port. Existing c1 exclusion rules
+// matching golangci-lint's own port. Existing downstream exclusion rules
 // match against the bare diagnostic text, so the format passes
 // through unchanged.
 func wireAnalyzerFnsGodoxNative(c *catalog) {

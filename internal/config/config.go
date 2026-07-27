@@ -132,10 +132,11 @@ func applyLinterSettingsDefaults(s *LintersSettings) {
 	// FieldWritesAreUses=true, ExportedFieldsAreUsed=true,
 	// ParametersAreUsed=true, LocalVariablesAreUsed=true,
 	// GeneratedIsUsed=true. Without these the native port emits
-	// ~5k unused diagnostics on c1's pkg/controller/... where the same
-	// config under golangci-lint v2.9 emits 0. Same bool-toggle
-	// authoritative-block detection as goconst above: only inject when
-	// every key is at its zero value, so an explicit YAML block wins.
+	// ~5k unused diagnostics on a large monorepo's controller tree,
+	// where the same config under golangci-lint v2.9 emits 0. Same
+	// bool-toggle authoritative-block detection as goconst above: only
+	// inject when every key is at its zero value, so an explicit YAML
+	// block wins.
 	if !s.Unused.FieldWritesAreUses && !s.Unused.PostStatementsAreReads &&
 		!s.Unused.ExportedFieldsAreUsed && !s.Unused.ParametersAreUsed &&
 		!s.Unused.LocalVariablesAreUsed && !s.Unused.GeneratedIsUsed {

@@ -309,8 +309,8 @@ func TestPolyBatchA_Forbidigo_StructuredPatternYAML(t *testing.T) {
 // surfaces a non-nil Analyzer when include/exclude lists are
 // populated. The actual gosec rule registration happens lazily
 // inside Run, so we can only assert the analyzer's presence and
-// settings round-trip here; integration coverage lives in c1's
-// smoke test.
+// settings round-trip here; integration coverage lives in the
+// large-monorepo smoke test.
 func TestPolyBatchA_Gosec_IncludeExcludeFilters(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"

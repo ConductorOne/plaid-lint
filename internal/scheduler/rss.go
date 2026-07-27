@@ -16,7 +16,7 @@ import (
 )
 
 // DefaultRSSBudgetBytes is the W9 default RSS ceiling: ≤ 5 GB peak
-// RSS on c1-scale repos. The W10 benchmark
+// RSS on monorepo-scale repos. The W10 benchmark
 // harness can override this when measuring different hardware
 // envelopes; production attachments via [Cache.AttachScheduler] pass
 // the value explicitly so the default is opt-in only.

@@ -26,8 +26,8 @@ import (
 // Settings: [config.UnparamSettings.CheckExported] threads through
 // to `Checker.CheckExportedFuncs`. The message format upstream
 // emits (e.g. `<f> - result 0 (error) is always nil`) matches the
-// subproc wrapper's canonicalized output so c1 exclusion rules
-// over the diagnostic stem continue to apply.
+// subproc wrapper's canonicalized output so downstream exclusion
+// rules over the diagnostic stem continue to apply.
 func wireAnalyzerFnsUnparamNative(c *catalog) {
 	wireNativeFn(c, "unparam", func(cfg any) []*analysis.Analyzer {
 		checkExported := false

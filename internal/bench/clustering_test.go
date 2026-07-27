@@ -24,8 +24,8 @@ import (
 //   - The gate's NewPkgAdmits stream covers all packages (no
 //     starvation in this small fixture).
 //
-// This is the C.3 prototype's correctness validator before the c1
-// bench sweep runs in C.4.
+// This is the C.3 prototype's correctness validator before the
+// monorepo bench sweep runs in C.4.
 func TestHarness_ClusteringDigestEquivalence(t *testing.T) {
 	requireGo(t)
 	dir := t.TempDir()

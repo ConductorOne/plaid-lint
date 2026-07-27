@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fixture": "/data/squire/src/plaid-lint-w10/internal/pipelinetest/testdata/bench_medium",
+  "fixture": "internal/pipelinetest/testdata/bench_medium",
   "fixture_shape": "bench_medium",
   "observation_source": "runtimemetrics",
   "platform": "linux/arm64",

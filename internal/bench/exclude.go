@@ -306,8 +306,8 @@ func matchSegs(pat, name []string) bool {
 // LoadExcludePathsFromYAML reads a .golangci.yaml file and returns
 // the union of path-pattern lists declared at:
 //
-//   - linters.exclusions.paths (v2 schema, current c1)
-//   - formatters.exclusions.paths (v2 schema, current c1)
+//   - linters.exclusions.paths (v2 schema, current)
+//   - formatters.exclusions.paths (v2 schema, current)
 //   - run.skip-dirs (v1 schema, legacy)
 //   - run.skip-files (v1 schema, legacy)
 //

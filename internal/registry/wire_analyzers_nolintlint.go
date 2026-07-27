@@ -21,7 +21,7 @@ import (
 // and the `internal` segment makes it unimportable from outside the
 // golangci-lint module (landmine 26). The in-tree analyzer parses
 // `//nolint` directives in source comments and applies the three
-// load-bearing checks c1's `.golangci.yml` exercises:
+// load-bearing checks real-world `.golangci.yml` files exercise:
 //
 //   - RequireSpecific:    a bare `//nolint` (no linter list) is flagged.
 //   - RequireExplanation: a `//nolint:foo` without `// trailing text`
@@ -37,8 +37,8 @@ import (
 // in-pass analyzers. Documented as landmine 38 in the playbook.
 //
 // The analyzer name is "nolintlint" (matches the catalog row); the
-// diagnostic Message format mirrors upstream's wrapper so c1's
-// existing nolint hygiene work translates cleanly.
+// diagnostic Message format mirrors upstream's wrapper so existing
+// nolint hygiene work in downstream repos translates cleanly.
 func wireAnalyzerFnsNolintlint(c *catalog) {
 	wireNativeFn(c, "nolintlint", func(cfg any) []*analysis.Analyzer {
 		s, _ := cfg.(*config.NoLintLintSettings)

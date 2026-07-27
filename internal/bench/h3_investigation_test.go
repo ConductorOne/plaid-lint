@@ -125,7 +125,7 @@ func TestH3_ObservationSourceDivergence(t *testing.T) {
 
 	// Hypothesis check: report whether runtimemetrics produces the
 	// same digest as vmhwm. This is the load-bearing question the
-	// c1 report Finding 1 raised.
+	// monorepo report Finding 1 raised.
 	vmDigests := map[scheduler.ObservationSource]map[string]int{}
 	for _, r := range rows {
 		if _, ok := vmDigests[r.source]; !ok {

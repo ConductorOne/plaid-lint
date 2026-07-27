@@ -22,7 +22,7 @@ func DataDir() string {
 }
 
 // TestTraceCheck pins the diagnostic surface against the testdata
-// fixture vendored from upstream (github.com/ductone/ci-tools). The
+// fixture vendored from the upstream internal CI-tooling repo. The
 // `// want "..."` comments in testdata/src/trace/trace.go declare the
 // expected diagnostics; analysistest.Run fails the test on any drift.
 func TestTraceCheck(t *testing.T) {

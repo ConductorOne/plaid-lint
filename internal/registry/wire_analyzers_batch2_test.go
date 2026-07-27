@@ -184,11 +184,12 @@ func TestBatch2_NoNamedReturns_AppliesFlags(t *testing.T) {
 	}
 }
 
-// TestBatch2_C1EnableSet covers c1's real-world long-tail set —
+// TestBatch2_RealWorldEnableSet covers a real-world long-tail set —
 // asasalint, nonamedreturns, nosprintfhostport, and whitespace are
-// enabled in c1's .golangci.yml. Confirms batch2 closes those gaps.
-func TestBatch2_C1EnableSet(t *testing.T) {
-	c1Enables := []string{
+// enabled in the reference monorepo's .golangci.yml. Confirms batch2
+// closes those gaps.
+func TestBatch2_RealWorldEnableSet(t *testing.T) {
+	realWorldEnables := []string{
 		"asasalint", "asciicheck", "bidichk", "bodyclose", "depguard",
 		"durationcheck", "errcheck", "errorlint", "exhaustive",
 		"forbidigo", "gochecknoinits", "goconst", "gocritic",
@@ -201,7 +202,7 @@ func TestBatch2_C1EnableSet(t *testing.T) {
 
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"
-	cfg.Linters.Enable = c1Enables
+	cfg.Linters.Enable = realWorldEnables
 
 	reg, _, err := Build(cfg)
 	if err != nil {
@@ -213,12 +214,13 @@ func TestBatch2_C1EnableSet(t *testing.T) {
 		enabled[r.Name] = true
 	}
 
-	// Four batch2 linters are c1-enabled: asasalint, nonamedreturns,
-	// nosprintfhostport, whitespace. Assert all four resolve cleanly.
-	c1Wants := []string{"asasalint", "nonamedreturns", "nosprintfhostport", "whitespace"}
-	for _, name := range c1Wants {
+	// Four batch2 linters are in the reference enable set: asasalint,
+	// nonamedreturns, nosprintfhostport, whitespace. Assert all four
+	// resolve cleanly.
+	wants := []string{"asasalint", "nonamedreturns", "nosprintfhostport", "whitespace"}
+	for _, name := range wants {
 		if !enabled[name] {
-			t.Errorf("batch2 ∩ c1: %q expected in Enabled()", name)
+			t.Errorf("batch2 ∩ reference: %q expected in Enabled()", name)
 		}
 	}
 }

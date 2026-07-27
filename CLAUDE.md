@@ -85,8 +85,8 @@ format only the files you edited.
 ## Workflow
 
 - Worktrees live as siblings of the main checkout, named
-  `/data/squire/src/plaid-lint-<short-branch-name>` (drop the `phase`
-  prefix, e.g. `phase1.7-track1` -> `plaid-lint-1.7-track1`).
+  `plaid-lint-<short-branch-name>` (drop the `phase` prefix, e.g.
+  `phase1.7-track1` -> `plaid-lint-1.7-track1`).
 - Branches merge fast-forward into `main` after review. Never push to
   `main` directly; never force-push `main`.
 - Branch names follow the phase the work belongs to: `phase1.7-<topic>`,

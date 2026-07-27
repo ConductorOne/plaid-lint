@@ -19,7 +19,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 mkdir -p "$INSTALL_DIR"
 
 # GNU time (for `/usr/bin/time -v` wall + VmHWM measurement in
-# scripts/compare-against-c1.sh). The bash builtin `time` doesn't
+# scripts/compare-against-monorepo.sh). The bash builtin `time` doesn't
 # expose VmHWM. Base ubuntu images and minimal containers don't ship
 # /usr/bin/time; macOS has it as `gtime` from brew's gnu-time package.
 if ! command -v /usr/bin/time >/dev/null 2>&1 && ! command -v gtime >/dev/null 2>&1; then
