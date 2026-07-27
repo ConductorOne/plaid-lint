@@ -28,5 +28,16 @@ jobs:
         # testing.Short() guard for precisely this case ("loading the packages
         # can take a long time with a cold cache") — a 2-core runner is that
         # case. None of the tests that have actually flaked in CI are skipped.
+        #
+        # internal/bench is excluded because it is benchmark-harness code, not
+        # shipped code: `go list -deps ./cmd/plaid-lint` does not contain it,
+        # only cmd/plaid-lint-bench does. Its tests are the slowest thing left
+        # in the step, and a failure there cannot affect the linter a PR is
+        # actually changing — it has twice turned PRs red for reasons unrelated
+        # to their diff. Note this drops its *tests* only: `go build ./...` and
+        # `go vet ./...` above still compile and vet the package, so a genuine
+        # breakage is still caught. internal/scheduler is deliberately kept —
+        # also bench-only by linkage, but it runs in ~0.15s and its tests cover
+        # real gate/estimator logic.
         run: |
-          go test -short -p 1 $(go list ./... | grep -Ev '/internal/gopls/internal/(expect|gcimporter|imports)$')
+          go test -short -p 1 $(go list ./... | grep -Ev '/internal/gopls/internal/(expect|gcimporter|imports)$|/internal/bench$')
