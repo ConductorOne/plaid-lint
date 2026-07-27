@@ -6,6 +6,7 @@ package scheduler
 
 import (
 	"runtime"
+	"runtime/debug"
 	"testing"
 )
 
@@ -51,20 +52,45 @@ func TestNoopSampler_Zero(t *testing.T) {
 }
 
 // TestHeapAllocSampler_DetectsAllocation: allocating ~10 MB between
-// NewSample and Delta should produce a positive delta.
+// NewSample and Delta should produce a delta of about that size.
+//
+// HeapAlloc is a live-heap gauge, not a cumulative counter: reclaim
+// landing inside the sample window can drop the "after" reading to or
+// below the baseline, and [HeapAllocSampler.Delta] floors at zero.
+// Two things have to be pinned to make the window deterministic:
+//
+//   - debug.SetGCPercent(-1) stops a new cycle from starting.
+//   - runtime.GC() then flushes the cycle already in flight, sweep
+//     phase included. Disabling GC alone is not enough: HeapAlloc
+//     falls during sweep, which runs lazily after the mark completes,
+//     so a cycle triggered before the test can still free megabytes
+//     mid-window. runtime.GC drives sweepone to completion before it
+//     returns, leaving the heap quiescent.
+//
+// With both in place nothing lowers HeapAlloc, so the 10 MB below is
+// still accounted for at Delta time.
 func TestHeapAllocSampler_DetectsAllocation(t *testing.T) {
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+	runtime.GC()
+
+	const allocBytes = 10 * 1024 * 1024
+	// With GC off none of allocBytes can be reclaimed, so the delta is
+	// at least that much; the slack only absorbs runtime accounting
+	// (span rounding, the sampler's own MemStats work).
+	const wantAtLeast = allocBytes - 2*1024*1024
+
 	s := NewHeapAllocSampler()
 	before := s.NewSample()
 	// Allocate ~10 MB. KeepAlive prevents the compiler from elision-
 	// optimising it away before Delta sees it.
-	junk := make([]byte, 10*1024*1024)
+	junk := make([]byte, allocBytes)
 	for i := range junk {
 		junk[i] = byte(i)
 	}
 	got := s.Delta(before)
 	runtime.KeepAlive(junk)
-	if got == 0 {
-		t.Errorf("HeapAllocSampler.Delta after 10 MB alloc = 0, want > 0")
+	if got < wantAtLeast {
+		t.Errorf("HeapAllocSampler.Delta after %d-byte alloc = %d, want >= %d", allocBytes, got, wantAtLeast)
 	}
 }
 
