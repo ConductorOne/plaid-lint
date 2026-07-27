@@ -26,8 +26,8 @@ package pipelinetest
 //   - Cold→warm diagnostic equivalence (the unscheduled contract).
 //   - Scheduled-vs-unscheduled diagnostic equivalence (the W9
 //     contract).
-//   - Scheduler.Stats.ActionsBlocked > 0 (the budget gate threw
-//     at least one Acquire on the slow path).
+//   - Scheduler.Stats shows the gate was installed and consulted
+//     (every action was acquired and completed through it).
 //   - Scheduler.Stats.PeakConcurrency ≤ expected cap (the gate is
 //     honored).
 //   - Scheduler.Stats.IRPinEvents > 0 and Snapshot empty at end
@@ -84,21 +84,34 @@ func TestSchedulerIntegration_SABatchEquivalence(t *testing.T) {
 	}
 	t.Logf("baseline pins: cold=%d warm=%d", coldPins, warmPins)
 
-	// Scheduled run with a tight budget so the gate has to throttle.
-	// The 256 MB budget is the brief-specified tight value; the
-	// count cap is set to 1 (mandatory serialization) so the
-	// ActionsBlocked assertion is robust even under -race, where
-	// goroutines may drain the queue faster than it fills. With
-	// schedMaxConc=1 every action after the first must wait at
-	// the gate, so ActionsBlocked >= ActionsAcquired - 1.
+	// Scheduled run with a tight budget. The 256 MB budget is the
+	// brief-specified tight value; the count cap is set to 1
+	// (mandatory serialization) so PeakConcurrency has a hard
+	// expected value.
 	//
 	// The 256 MB bytes-budget is still load-bearing: it pins the
 	// constructor-time argument the scheduler reflects in
 	// Stats.BudgetBytes for the W10 benchmark harness, and
 	// exercises the bytes-axis bypass when a single oversized
 	// action would otherwise deadlock.
+	//
+	// Note this test deliberately does NOT assert
+	// Stats.ActionsBlocked > 0. Whether an Acquire has to wait is
+	// emergent: it needs two actions to be in flight at the same
+	// instant, which the pipeline does not promise. On a
+	// CPU-starved host (GOMAXPROCS=1, or GOMAXPROCS=2 under
+	// external load) the action fan-out can run strictly
+	// serially, every Acquire finds the gate free, and
+	// ActionsBlocked is legitimately 0 even though the gate is
+	// wired up correctly. That contract is pinned deterministically
+	// instead by
+	// TestRSSBudgetScheduler_GateBlocksUnderContention in
+	// internal/scheduler, which synchronises the overlap rather
+	// than hoping for it. What this test can and does assert is
+	// that the gate was installed and every action passed through
+	// it.
 	const (
-		schedBudget = 256 * 1024 * 1024
+		schedBudget  = 256 * 1024 * 1024
 		schedMaxConc = 1
 	)
 	scheduledL1 := t.TempDir()
@@ -134,12 +147,13 @@ func TestSchedulerIntegration_SABatchEquivalence(t *testing.T) {
 			coldKey, schedKey)
 	}
 
-	// W9 contract 2: budget gate is binding. Either the count or
-	// bytes axis must have throttled at least one Acquire.
-	if st.ActionsBlocked == 0 {
-		t.Errorf("ActionsBlocked = 0, want > 0 (tight 256 MB / 4-concurrent budget must throttle)")
+	// W9 contract 2: the gate is installed and every action went
+	// through it. Peak concurrency must respect the count cap, and
+	// at least one action must actually have been admitted (a
+	// silently-bypassed scheduler would report a flat zero).
+	if st.PeakConcurrency == 0 {
+		t.Errorf("PeakConcurrency = 0, want ≥ 1 (no action was ever in flight through the gate)")
 	}
-	// Peak concurrency must respect the count cap.
 	if st.PeakConcurrency > schedMaxConc {
 		t.Errorf("PeakConcurrency = %d, want ≤ %d", st.PeakConcurrency, schedMaxConc)
 	}
@@ -166,6 +180,12 @@ func TestSchedulerIntegration_SABatchEquivalence(t *testing.T) {
 	// but it must be > 0 and roughly matches the analyzer fan-out.
 	if st.ActionsAcquired == 0 {
 		t.Errorf("ActionsAcquired = 0, want > 0 (action graph must have entered the gate)")
+	}
+	// Every admitted action must also have released its slot, or
+	// the gate leaks capacity.
+	if st.ActionsCompleted != st.ActionsAcquired {
+		t.Errorf("ActionsCompleted = %d, want %d (= ActionsAcquired): gate slot leak",
+			st.ActionsCompleted, st.ActionsAcquired)
 	}
 }
 
