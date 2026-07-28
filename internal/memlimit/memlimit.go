@@ -6,7 +6,7 @@
 // (`runtime/debug.SetMemoryLimit`) from the running cgroup's memory
 // limit at process start.
 //
-// On c1's ~5800-package workspace the structural *ir.Program graph is
+// On a ~5800-package monorepo workspace the structural *ir.Program graph is
 // ~50 GB of working set; without GOMEMLIMIT the cold cascade peaks at
 // ~52 GB RSS on a 64 GB cgroup and risks OOM. Apply detects the
 // cgroup ceiling and pins the runtime soft limit at 75% of it — the

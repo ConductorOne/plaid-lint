@@ -12,6 +12,6 @@
 // the CLI wrapper around it. Tests in this package exercise the
 // harness against the in-repo synthetic fixtures
 // (bench_small / bench_medium / bench_cascade); the gate-decision
-// benchmark is run by the project lead via the binary against
-// /data/squire/src/c1.
+// benchmark is run by the project lead via the binary against a
+// large real-world Go monorepo.
 package bench

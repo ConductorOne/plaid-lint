@@ -135,7 +135,7 @@ func TestPackageExcluder_FilePatterns_SomeFilesMatch(t *testing.T) {
 }
 
 func TestLoadExcludePathsFromYAML_V2Schema(t *testing.T) {
-	// Minimal v2-schema doc mirroring c1's .golangci.yml shape.
+	// Minimal v2-schema doc mirroring a real-world .golangci.yml shape.
 	body := []byte(`version: "2"
 linters:
   default: none
@@ -211,12 +211,12 @@ func TestLoadExcludePathsFromYAML_V1SkipDirs(t *testing.T) {
 	}
 }
 
-func TestLoadExcludePathsFromYAML_C1Subset(t *testing.T) {
-	// Load c1's actual .golangci.yml shape (subset). This is the
-	// "does the YAML reader work on the real file" check the brief
-	// asks for. We use a verbatim slice of the relevant sections so
-	// the test is hermetic — see the dispatcher report for the
-	// full-file run against /data/squire/src/c1/.golangci.yml.
+func TestLoadExcludePathsFromYAML_RealWorldSubset(t *testing.T) {
+	// Load a real-world .golangci.yml shape (subset), taken from a
+	// large Go monorepo. This is the "does the YAML reader work on
+	// the real file" check the brief asks for. We use a verbatim
+	// slice of the relevant sections so the test is hermetic — see
+	// the dispatcher report for the full-file run.
 	body := []byte(`version: "2"
 linters:
   default: none

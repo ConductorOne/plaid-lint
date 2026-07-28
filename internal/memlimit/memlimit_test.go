@@ -13,8 +13,8 @@ import (
 	"testing"
 )
 
-// 64 GiB in bytes — the canonical cgroup ceiling on c1's worker nodes
-// and the value the 75% headroom rationale was calibrated against.
+// 64 GiB in bytes — the canonical cgroup ceiling on the CI worker
+// nodes the 75% headroom rationale was calibrated against.
 const sixtyFourGiB uint64 = 64 * 1024 * 1024 * 1024
 
 // 48 GiB in bytes — 75% of 64 GiB; the validated cascade-d-m1on

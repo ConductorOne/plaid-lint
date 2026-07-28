@@ -13,8 +13,8 @@ import (
 // TestUnusedAnalyzer_UnusedFunc pins the diagnostic stem
 // `func <name> is unused` against an unexported function that is
 // never referenced. Mirrors the subproc wrapper's canonicalized
-// `func F is unused` emission so c1 exclusion rules continue to
-// apply.
+// `func F is unused` emission so downstream exclusion rules continue
+// to apply.
 func TestUnusedAnalyzer_UnusedFunc(t *testing.T) {
 	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
 		"a/a.go": `package a

@@ -158,7 +158,7 @@ func (*NoopSampler) Delta(_ any) uint64 { return 0 }
 // HeapAllocSampler reads runtime.MemStats.HeapAlloc. This is the W9
 // inlined source preserved for A/B comparison. ReadMemStats holds the
 // GC stop-the-world lock briefly on every call, which adds ~10-50µs
-// per action; on a c1-scale run that's hundreds of millisecond of
+// per action; on a monorepo-scale run that's hundreds of millisecond of
 // overhead. The number itself is allocation-not-residency, so it
 // over-counts short-lived temporaries the GC reclaims before
 // the gate is the actual budget input.
@@ -311,17 +311,18 @@ func readVmHWMBytes() uint64 {
 // Initialized lazily on first NewSample so processes that never
 // instantiate one avoid the runtime/metrics descriptor lookup.
 //
-// KNOWN LIMITATION (Phase 1.5 H-3, c1 report Finding 1). On the c1
-// W10 cold benchmark (5,026 packages, 102 analyzers) this sampler
-// produced cold.action_count = 88,672 vs vmhwm / heapalloc =
-// 270,992, with a different diagnostic_digest. Synthetic-fixture
-// evidence (bench_medium × 3 sources × 3 iterations, all identical
-// digest + action_count) rules out small-fixture cache leakage.
-// The c1-scale divergence mechanism is unidentified; the synthetic
-// test cannot reproduce it. Until a c1-scale re-run identifies the
-// mechanism, production callers should not select this source for
-// c1-scale workloads; the platform default (vmhwm on Linux) is the
-// safer choice. See `TestH3_ObservationSourceDivergence` in
+// KNOWN LIMITATION (Phase 1.5 H-3, large-monorepo report Finding 1).
+// On the W10 cold benchmark against a 5,026-package monorepo (102
+// analyzers) this sampler produced cold.action_count = 88,672 vs
+// vmhwm / heapalloc = 270,992, with a different diagnostic_digest.
+// Synthetic-fixture evidence (bench_medium × 3 sources × 3 iterations,
+// all identical digest + action_count) rules out small-fixture cache
+// leakage.
+// The at-scale divergence mechanism is unidentified; the synthetic
+// test cannot reproduce it. Until a monorepo-scale re-run identifies
+// the mechanism, production callers should not select this source for
+// monorepo-scale workloads; the platform default (vmhwm on Linux) is
+// the safer choice. See `TestH3_ObservationSourceDivergence` in
 // internal/bench for the matrix.
 type RuntimeMetricsSampler struct {
 	once    sync.Once

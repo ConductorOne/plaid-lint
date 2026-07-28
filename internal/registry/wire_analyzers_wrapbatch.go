@@ -399,8 +399,8 @@ func wireAnalyzerFnsWrapBatch(c *catalog) {
 		// struct-literal fields. golangci-lint v2.9 pins goconst v1.8
 		// which has no such visitor, so for diagnostic parity we mask
 		// CompositeLit by default. Removing this exclusion would
-		// surface roughly 1.5K extra diagnostics on c1 that upstream
-		// silently drops.
+		// surface roughly 1.5K extra diagnostics on a large monorepo
+		// corpus that upstream silently drops.
 		if gc.ExcludeTypes == nil {
 			gc.ExcludeTypes = map[goconstpass.Type]bool{}
 		}

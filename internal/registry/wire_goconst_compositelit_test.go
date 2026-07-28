@@ -17,8 +17,9 @@ import (
 // strings inside composite literals (`[]string{"foo"}`, struct fields,
 // map values) must NOT surface as goconst diagnostics. golangci-lint
 // v2.9 pins goconst v1.8 which has no CompositeLit visitor; plaid
-// uses v1.10 which added one. Without the mask, c1 surfaces ~1.5K
-// diagnostics on strings that only show up in composite literals.
+// uses v1.10 which added one. Without the mask, a large monorepo
+// corpus surfaces ~1.5K diagnostics on strings that only show up in
+// composite literals.
 func TestGoconst_CompositeLitMasked(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"

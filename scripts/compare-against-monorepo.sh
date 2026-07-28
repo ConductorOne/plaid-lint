@@ -3,16 +3,16 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 #
-# compare-against-c1.sh drives plaid-lint vs golangci-lint v2.x
-# end-to-end against a target tree (default: c1's pkg/c1semconv) and
-# produces a single markdown report covering wall time, peak RSS, and
-# diagnostic-set divergence.
+# compare-against-monorepo.sh drives plaid-lint vs golangci-lint v2.x
+# end-to-end against a target tree and produces a single markdown
+# report covering wall time, peak RSS, and diagnostic-set divergence.
 #
 # Usage:
-#   compare-against-c1.sh [TARGET]
+#   compare-against-monorepo.sh [TARGET]
 #
-# TARGET defaults to /data/squire/src/c1/pkg/c1semconv/... (the smoke
-# target). Pass /data/squire/src/c1/... for the full-c1 run.
+# TARGET is a `go list`-style package pattern. It defaults to a small
+# smoke subtree of the reference monorepo checkout named by
+# $MONOREPO_ROOT; pass "$MONOREPO_ROOT/..." for a full-repo run.
 #
 # Requirements: every binary listed in scripts/install-lint-binaries.sh
 # must be on $PATH. The plaid-lint and compare-lints binaries must
@@ -20,29 +20,30 @@
 
 set -eu
 
-TARGET="${1:-/data/squire/src/c1/pkg/c1semconv/...}"
-REPORT="${REPORT:-/tmp/compare-against-c1.md}"
+MONOREPO_ROOT="${MONOREPO_ROOT:-/path/to/monorepo}"
+TARGET="${1:-$MONOREPO_ROOT/pkg/semconv/...}"
+REPORT="${REPORT:-/tmp/compare-against-monorepo.md}"
 COLD_RUNS="${COLD_RUNS:-2}"
 GOMAXPROCS="${GOMAXPROCS:-8}"
 export GOMAXPROCS
 
 # plaid-lint Phase-3 subprocess-runners with hardcoded `./...` /
 # enumerateGoFiles arguments trip on `.git/logs/refs/remotes/origin/...go`
-# paths created when c1 branches are named like `pkg/foo/bar.go`. Until
+# paths created when branches are named like `pkg/foo/bar.go`. Until
 # the runners take the target package set, suppress them here. See
 # NOTES.md D-101 (smoke blocker) for the full list and the runner-side
 # fix scoped into the follow-up dispatch.
 PLAID_DISABLE="${PLAID_DISABLE:-gochecknoinits,dogsled,dupl,gocyclo,godox,lll,nestif,unconvert}"
 
-# c1's .golangci.yml references a custom Go-plugin (tracecheck) that
-# ships as a .so the dev environment does not produce. golangci-lint
-# refuses to run when it can't load it, so the runner uses a cleaned
-# copy of the config (custom block + tracecheck enable/disable lines
-# stripped). Plaid-lint accepts the original config and surfaces a
-# warning, so it still gets the unmodified file. This matches what
-# scripts/config-parity.sh does.
-C1_CONFIG="${C1_CONFIG:-/data/squire/src/c1/.golangci.yml}"
-C1_CONFIG_GCI="${C1_CONFIG_GCI:-/tmp/compare-golangci.yml}"
+# The reference monorepo's .golangci.yml pulls in a custom Go-plugin
+# (tracecheck) shipped as a .so the dev environment does not produce.
+# golangci-lint refuses to run when it can't load it, so the runner
+# uses a cleaned copy of the config (custom block + tracecheck
+# enable/disable lines stripped). Plaid-lint accepts the original
+# config and surfaces a warning, so it still gets the unmodified file.
+# This matches what scripts/config-parity.sh does.
+TARGET_CONFIG="${TARGET_CONFIG:-$MONOREPO_ROOT/.golangci.yml}"
+TARGET_CONFIG_GCI="${TARGET_CONFIG_GCI:-/tmp/compare-golangci.yml}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLAID_LINT="${PLAID_LINT:-/tmp/plaid-lint}"
@@ -57,8 +58,8 @@ if [ ! -x "$STRIP_TRACECHECK" ] || [ "$REPO_ROOT/cmd/strip-tracecheck-config/mai
     echo "  Building $STRIP_TRACECHECK"
     (cd "$REPO_ROOT" && go build -o "$STRIP_TRACECHECK" ./cmd/strip-tracecheck-config)
 fi
-if [ ! -f "$C1_CONFIG_GCI" ] || [ "$C1_CONFIG" -nt "$C1_CONFIG_GCI" ] || [ "$STRIP_TRACECHECK" -nt "$C1_CONFIG_GCI" ]; then
-    "$STRIP_TRACECHECK" "$C1_CONFIG" "$C1_CONFIG_GCI"
+if [ ! -f "$TARGET_CONFIG_GCI" ] || [ "$TARGET_CONFIG" -nt "$TARGET_CONFIG_GCI" ] || [ "$STRIP_TRACECHECK" -nt "$TARGET_CONFIG_GCI" ]; then
+    "$STRIP_TRACECHECK" "$TARGET_CONFIG" "$TARGET_CONFIG_GCI"
 fi
 
 # Paths to JSON artifacts.
@@ -159,7 +160,7 @@ while [ "$i" -le "$COLD_RUNS" ]; do
     rm -rf "$GCI_CACHE_DIR"
     rm -f "$G_JSON"
     set +e
-    run_with_time "$G_LOG" golangci-lint run --output.json.path="$G_JSON" --config="$C1_CONFIG_GCI" "$TARGET"
+    run_with_time "$G_LOG" golangci-lint run --output.json.path="$G_JSON" --config="$TARGET_CONFIG_GCI" "$TARGET"
     set -e
     w=$(extract_wall "$G_LOG"); r=$(extract_rss "$G_LOG")
     echo "    wall=${w}s rss=${r}KB"
@@ -174,7 +175,7 @@ while [ "$i" -le "$COLD_RUNS" ]; do
     rm -rf "$PLAID_CACHE"
     rm -f "$C_JSON"
     set +e
-    run_with_time "$C_LOG" "$PLAID_LINT" run --output.json.path="$C_JSON" --config="$C1_CONFIG" --disable="$PLAID_DISABLE" "$TARGET"
+    run_with_time "$C_LOG" "$PLAID_LINT" run --output.json.path="$C_JSON" --config="$TARGET_CONFIG" --disable="$PLAID_DISABLE" "$TARGET"
     set -e
     w=$(extract_wall "$C_LOG"); r=$(extract_rss "$C_LOG")
     echo "    wall=${w}s rss=${r}KB"
@@ -191,7 +192,7 @@ done
 echo "==> Warm runs"
 echo "  warm golangci-lint"
 set +e
-run_with_time "${G_LOG}.warm" golangci-lint run --output.json.path="$G_JSON" --config="$C1_CONFIG_GCI" "$TARGET"
+run_with_time "${G_LOG}.warm" golangci-lint run --output.json.path="$G_JSON" --config="$TARGET_CONFIG_GCI" "$TARGET"
 set -e
 g_warm_wall=$(extract_wall "${G_LOG}.warm")
 g_warm_rss=$(extract_rss "${G_LOG}.warm")
@@ -199,7 +200,7 @@ echo "    wall=${g_warm_wall}s rss=${g_warm_rss}KB"
 
 echo "  warm plaid-lint"
 set +e
-run_with_time "${C_LOG}.warm" "$PLAID_LINT" run --output.json.path="$C_JSON" --config="$C1_CONFIG" --disable="$PLAID_DISABLE" "$TARGET"
+run_with_time "${C_LOG}.warm" "$PLAID_LINT" run --output.json.path="$C_JSON" --config="$TARGET_CONFIG" --disable="$PLAID_DISABLE" "$TARGET"
 set -e
 c_warm_wall=$(extract_wall "${C_LOG}.warm")
 c_warm_rss=$(extract_rss "${C_LOG}.warm")

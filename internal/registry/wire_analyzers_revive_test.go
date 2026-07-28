@@ -349,7 +349,7 @@ func TestRevive_NormalizeArgValue_Nested(t *testing.T) {
 // settings struct, the resolved Analyzer is non-nil and carries the
 // upstream Name. The closure's setup runs lazily on the first Run call,
 // so we don't exercise that here — see the Lint engine integration
-// test if c1 smoke surfaces a per-pass bug.
+// test if the large-monorepo smoke run surfaces a per-pass bug.
 func TestRevive_BuildAnalyzerRuns(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"

@@ -16,7 +16,7 @@ import (
 // TestHarness_CascadeFileMissing_FailsFast is the LEARN-FGL-006
 // regression. Pre-fix, an unreachable --cascade-file argument was
 // only detected inside applyCascadeEdit, after cold (and warm, if
-// enabled) had already run — 7-15 minutes on the c1 fixture. The
+// enabled) had already run — 7-15 minutes on the monorepo fixture. The
 // guard added to bench.Run must catch the missing path before any
 // scenario starts.
 //

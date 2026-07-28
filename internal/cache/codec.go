@@ -10,7 +10,7 @@ import (
 
 // envelopeMagic identifies a plaid-lint cache entry blob. Changing the
 // magic forces a CacheVersion bump and effectively invalidates all entries.
-var envelopeMagic = []byte{'C', '1', 'C', 'L'} // "C1CL" = plaid-lint cache (C1 namespace)
+var envelopeMagic = []byte{'C', '1', 'C', 'L'} // "C1CL" — historical four-byte tag; opaque
 
 // kindL1 / kindL2 disambiguate entry envelopes. If a future caller asks
 // for an L1 path but the bytes on disk happen to decode as a valid L2,

@@ -10,11 +10,12 @@
 # Usage:
 #   config-parity.sh [CONFIG_PATH]
 #
-# CONFIG_PATH defaults to /data/squire/src/c1/.golangci.yml.
+# CONFIG_PATH defaults to $MONOREPO_ROOT/.golangci.yml.
 
 set -eu
 
-CONFIG="${1:-/data/squire/src/c1/.golangci.yml}"
+MONOREPO_ROOT="${MONOREPO_ROOT:-/path/to/monorepo}"
+CONFIG="${1:-$MONOREPO_ROOT/.golangci.yml}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLAID_LINT="${PLAID_LINT:-/tmp/plaid-lint}"
 
@@ -31,7 +32,7 @@ fi
 GCI=/tmp/parity-golangci.json
 CLK=/tmp/parity-plaid.json
 
-# c1's config has a custom (.so) plugin (tracecheck). golangci-lint
+# The reference config has a custom (.so) plugin (tracecheck). golangci-lint
 # refuses to even list linters when it can't load the plugin, so we have
 # to chdir to the config's directory AND accept that golangci-lint will
 # fail on `tracecheck`. The workaround: copy the config into /tmp with

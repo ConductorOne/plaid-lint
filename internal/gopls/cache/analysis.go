@@ -1455,10 +1455,10 @@ func (act *action) String() string {
 // On cold (RSS-saturated) runs this trades a small slice of intra-package
 // parallelism for a tighter peak working-set: at most one analyzer body
 // per package is mid-execution at a time, so the GC mark phase sees less
-// live transient state. Projected ~50-90s cold wall savings
-// on the c1 controller scope. On warm runs (where every action returns
-// from the L1 fast path in microseconds) the fanout is cheap; leaving the
-// default at enabled preserves the warm-run shape.
+// live transient state. Projected ~50-90s cold wall savings on a
+// ~1500-package monorepo controller scope. On warm runs (where every
+// action returns from the L1 fast path in microseconds) the fanout is
+// cheap; leaving the default at enabled preserves the warm-run shape.
 //
 // The gate is read once at process start; changes mid-run are not picked
 // up.

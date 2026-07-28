@@ -50,8 +50,8 @@ func F() {}
 
 // TestGocycloAnalyzer_HighComplexity pins the diagnostic message
 // format `cyclomatic complexity N of func \`<name>\` is high (> M)`
-// matching the subproc wrapper so c1 exclusion rules over the stem
-// continue to apply.
+// matching the subproc wrapper so downstream exclusion rules over the
+// stem continue to apply.
 func TestGocycloAnalyzer_HighComplexity(t *testing.T) {
 	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
 		"a/a.go": `package a

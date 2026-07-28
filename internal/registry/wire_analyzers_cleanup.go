@@ -24,8 +24,9 @@ import (
 //     wire_analyzers_nolintlint.go). The upstream lint logic lives at
 //     `github.com/golangci/golangci-lint/v2/pkg/golinters/nolintlint/internal`,
 //     which is unimportable from outside the golangci-lint module
-//     (landmine 26). The in-tree analyzer honors c1's load-bearing
-//     fields: RequireExplanation, RequireSpecific, AllowNoExplanation.
+//     (landmine 26). The in-tree analyzer honors the load-bearing
+//     fields real-world configs use: RequireExplanation,
+//     RequireSpecific, AllowNoExplanation.
 //     AllowUnused is deferred — the engine does not currently surface
 //     a per-diagnostic feedback hook to compute "which //nolint
 //     directives never matched a real diagnostic", and a faithful

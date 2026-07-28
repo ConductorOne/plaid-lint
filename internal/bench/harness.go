@@ -215,7 +215,7 @@ type Config struct {
 
 	// AllowColdWarmDigestMismatch demotes the cold↔warm equivalence
 	// assertion from a hard error to a flag in BenchmarkResult.
-	// Phase 1.7 sub-path-c C.4 surfaced a pre-existing c1-scale
+	// Phase 1.7 sub-path-c C.4 surfaced a pre-existing monorepo-scale
 	// determinism issue (cold and warm produce different diagnostic
 	// digests at N=0, with no clustering involved); the sweep's
 	// headline measurements (peak, walls, clustering counters) are

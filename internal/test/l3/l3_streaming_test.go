@@ -19,10 +19,10 @@ import (
 )
 
 // peakRSSCeilingBytes is the design ceiling for the
-// concurrency=1 + IR-streaming path: 1.5 GB on a c1-scale workload.
+// concurrency=1 + IR-streaming path: 1.5 GB on a monorepo-scale workload.
 // Synthetic fixtures peak at ~55 MB (W10 calibration), so we
 // assert the test peaks well under the ceiling; the real
-// validation is the W12+ c1 cascade benchmark.
+// validation is the W12+ monorepo cascade benchmark.
 const peakRSSCeilingBytes uint64 = 1536 * 1024 * 1024
 
 func requireGo(t *testing.T) {
@@ -229,7 +229,7 @@ func parseUint(b []byte) (uint64, bool) {
 //   - The L3 IRManager has no leaked pins at end of run.
 //   - Peak VmHWM is under the 1.5 GB ceiling (with the caveat that
 //     synthetic-fixture peaks are ~30× under target; the real
-//     validation is W12 c1).
+//     validation is the W12 monorepo run).
 //   - Cold→warm diagnostic equivalence holds.
 //
 // The 102-analyzer assertion is the W10 pin: a regression to
@@ -350,7 +350,7 @@ func TestL3StreamingCorrectness(t *testing.T) {
 	// VmHWM ceiling assertion. peak = max VmHWM since process start;
 	// we treat postColdRSS as the run's peak (VmHWM is monotonic per
 	// kernel docs). The 1.5 GB ceiling is the design figure for
-	// c1-scale; synthetic fixtures should be 30× under, so this
+	// monorepo-scale; synthetic fixtures should be 30× under, so this
 	// assertion's load-bearing value is "if we exceed 1.5 GB on a
 	// 19-package synthetic fixture, the architecture is broken".
 	if postColdRSS > peakRSSCeilingBytes {

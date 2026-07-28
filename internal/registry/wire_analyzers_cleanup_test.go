@@ -215,7 +215,7 @@ func TestCleanup_Modernize_DisableSkipsSuiteMembers(t *testing.T) {
 
 // TestCleanup_Unqueryvet_ZeroSettings_UsesDefault asserts that an
 // empty UnqueryvetSettings keeps upstream's `DefaultSettings` in
-// effect — the path the c1's "enable but don't configure" use-case
+// effect — the path the common "enable but don't configure" use-case
 // hits. We can't introspect upstream's defaults directly, but the
 // Resolved Analyzer is non-nil and `.Name` matches the upstream
 // canonical name.

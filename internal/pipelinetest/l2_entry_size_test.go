@@ -11,7 +11,7 @@ package pipelinetest
 // at the moment of write. As the batch progressed, the FileSet
 // accumulated *token.File entries for every parsed or imported file,
 // so the N-th L2 store wrote roughly N files' worth of bytes — net L2
-// disk grew O(packages²). On c1's 5,026-package closure this filled
+// disk grew O(packages²). On a 5,026-package monorepo closure this filled
 // 184 GB before SIGKILL.
 //
 // Post-fix, each L2 entry carries only its own package's *token.File

@@ -541,9 +541,9 @@ linters:
 // the `unused` linter. honnef.co/go/tools/unused's library zero-values
 // flag every parameter / local / write-only field as unused; upstream
 // golangci-lint compensates in defaultLintersSettings. Without
-// this guard the native port produces ~5k unused diagnostics on
-// c1's pkg/controller/... where the same config under golangci-lint
-// v2.9 produces 0.
+// this guard the native port produces ~5k unused diagnostics on a
+// large monorepo's controller tree, where the same config under
+// golangci-lint v2.9 produces 0.
 func TestNewDefault_AppliesUnusedDefaults(t *testing.T) {
 	cfg := NewDefault()
 	u := cfg.Linters.Settings.Unused

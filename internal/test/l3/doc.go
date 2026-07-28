@@ -14,10 +14,10 @@
 //   - Peak VmHWM is bounded.
 //
 // On the 1.5 GB ceiling target: the design specifies "concurrency=1 ≤ 1.5
-// GB on a c1-scale workload". The W11 brief acknowledges that
+// GB on a monorepo-scale workload". The W11 brief acknowledges that
 // synthetic fixtures peak at ~55 MB (per W10's calibration on
 // bench_medium with 102 analyzers), so the 1.5 GB ceiling is
 // 30× below target on synthetic workloads. We assert peak VmHWM is
 // well under 1.5 GB (so the architecture-on-synthetic-fixture claim
-// is on the record) but the real c1-scale validation is W12+.
+// is on the record) but the real monorepo-scale validation is W12+.
 package l3

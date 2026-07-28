@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -16,21 +17,28 @@ import (
 
 // freshNS appends a per-run salt to the namespace string so a test
 // that asserts "miss before Put" is not poisoned by a prior run that
-// landed under the same id. The live helper at
-// /data/squire/bin/gocacheprog-wrapper persists entries across
-// processes, so without a salt the second `go test` would observe a
-// pre-existing hit.
+// landed under the same id. The live gocacheprog-wrapper helper
+// persists entries across processes, so without a salt the second
+// `go test` would observe a pre-existing hit.
 func freshNS(prefix string) string {
 	return fmt.Sprintf("%s/%d", prefix, time.Now().UnixNano())
 }
 
-// liveBackend returns a gocacheprog-backed backend driving the
-// real /data/squire/bin/gocacheprog-wrapper helper. Tests that need a
-// live wire skip cleanly when the wrapper is not reachable in the
-// current environment.
+// liveBackend returns a gocacheprog-backed backend driving a real
+// gocacheprog-wrapper helper, located via $PLAID_GOCACHEPROG_WRAPPER or
+// by looking up "gocacheprog-wrapper" on $PATH. Tests that need a live
+// wire skip cleanly when the wrapper is not reachable in the current
+// environment.
 func liveBackend(t *testing.T) *gocacheprogBackend {
 	t.Helper()
-	const wrapper = "/data/squire/bin/gocacheprog-wrapper"
+	wrapper := os.Getenv("PLAID_GOCACHEPROG_WRAPPER")
+	if wrapper == "" {
+		found, err := exec.LookPath("gocacheprog-wrapper")
+		if err != nil {
+			t.Skipf("gocacheprog-wrapper not reachable: %v", err)
+		}
+		wrapper = found
+	}
 	if _, err := os.Stat(wrapper); err != nil {
 		t.Skipf("gocacheprog-wrapper not reachable: %v", err)
 	}

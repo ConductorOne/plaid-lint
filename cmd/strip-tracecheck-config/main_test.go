@@ -13,10 +13,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// fixtureIn is a small replica of c1's .golangci.yml shape covering
-// every transform: custom-plugin block under linters.settings, the
-// tracecheck entry in linters.enable and linters.disable, and the
-// per-rule linters list under linters.exclusions.rules.
+// fixtureIn is a small replica of a real-world .golangci.yml shape,
+// covering every transform: custom-plugin block under
+// linters.settings, the tracecheck entry in linters.enable and
+// linters.disable, and the per-rule linters list under
+// linters.exclusions.rules.
 const fixtureIn = `version: "2"
 linters:
   default: none
@@ -189,22 +190,25 @@ linters:
 }
 
 // TestStripAgainstPythonReference compares the Go tool's output
-// against the python heredoc's output for c1's actual .golangci.yml.
+// against the python heredoc's output for a real-world .golangci.yml.
 // The two must be structurally equivalent (parse to the same value).
-// Skipped when c1's config is not on disk (CI without the c1 worktree
-// mounted).
+// Skipped unless $PLAID_REFERENCE_CONFIG points at such a config on
+// disk, so CI (which does not set it) stays hermetic.
 func TestStripAgainstPythonReference(t *testing.T) {
-	const c1Config = "/data/squire/src/c1/.golangci.yml"
-	if _, err := os.Stat(c1Config); err != nil {
-		t.Skipf("c1 config not available at %s: %v", c1Config, err)
+	refConfig := os.Getenv("PLAID_REFERENCE_CONFIG")
+	if refConfig == "" {
+		t.Skip("PLAID_REFERENCE_CONFIG not set; skipping python-reference comparison")
+	}
+	if _, err := os.Stat(refConfig); err != nil {
+		t.Skipf("reference config not available at %s: %v", refConfig, err)
 	}
 	const pyRef = "/tmp/compare-golangci-python-reference.yml"
 	if _, err := os.Stat(pyRef); err != nil {
-		t.Skipf("python reference not generated at %s; regenerate via scripts/compare-against-c1.sh once", pyRef)
+		t.Skipf("python reference not generated at %s; regenerate via scripts/compare-against-monorepo.sh once", pyRef)
 	}
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "go.yml")
-	if err := run(c1Config, dst); err != nil {
+	if err := run(refConfig, dst); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	gotB, _ := os.ReadFile(dst)

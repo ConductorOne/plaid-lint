@@ -30,8 +30,8 @@ const dogsledDefaultMaxBlankIdentifiers = 2
 // golangci's port. The subprocess wrapper appended the assignment
 // source text after a colon; the native port drops that detail
 // because reconstructing it requires re-printing the AST node, and
-// no exclusion rule in the c1 corpus matches against the trailing
-// expression text.
+// no exclusion rule in the reference corpus matches against the
+// trailing expression text.
 func wireAnalyzerFnsDogsledNative(c *catalog) {
 	wireNativeFn(c, "dogsled", func(cfg any) []*analysis.Analyzer {
 		maxBlank := dogsledDefaultMaxBlankIdentifiers

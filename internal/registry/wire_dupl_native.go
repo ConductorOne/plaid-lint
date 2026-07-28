@@ -44,7 +44,7 @@ const duplDefaultThreshold = 150
 // are ~10s.
 //
 // Message format: `N-M lines are duplicate of file:start-end` —
-// matches the subprocess wrapper's emission so c1's exclusion
+// matches the subprocess wrapper's emission so downstream exclusion
 // rules continue to apply unchanged.
 //
 // Aggregation: the underlying library Run() is invoked once per

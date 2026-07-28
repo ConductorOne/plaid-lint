@@ -30,7 +30,7 @@ const gocycloDefaultMinComplexity = 30
 //
 // Message format: `cyclomatic complexity N of func \`<name>\` is
 // high (> M)` — matches the subproc wrapper's emission so existing
-// c1 exclusion rules over the diagnostic stem continue to apply.
+// downstream exclusion rules over the diagnostic stem continue to apply.
 func wireAnalyzerFnsGocycloNative(c *catalog) {
 	wireNativeFn(c, "gocyclo", func(cfg any) []*analysis.Analyzer {
 		minComplexity := gocycloDefaultMinComplexity

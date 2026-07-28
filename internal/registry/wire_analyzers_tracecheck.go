@@ -11,8 +11,8 @@ import (
 )
 
 // wireAnalyzerFnsTracecheck attaches the AnalyzerFn for tracecheck —
-// c1's custom analyzer that flags trace-span names which don't match
-// the enclosing function name in snake_case.
+// a custom analyzer that flags trace-span names which don't match the
+// enclosing function name in snake_case.
 //
 // Upstream ships as a Go plugin (.so loaded via plugin.Open) consumed
 // by golangci-lint at runtime. plaid-lint vendors the analyzer

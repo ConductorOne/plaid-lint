@@ -16,10 +16,11 @@ import (
 
 // TestErrcheckAnalyzer_MessageFormat pins the diagnostic message format
 // to golangci-lint v2's wrapper: `Error return value of \`f.Close\` is
-// not checked`. The c1 .golangci.yml `std-error-handling` exclusion
-// preset regex matches this format only — switching back to the
-// upstream Analyzer's bare `unchecked error` message would break
-// the preset and resurrect the 277-on-c1 errcheck divergence.
+// not checked`. The `std-error-handling` exclusion preset regex
+// matches this format only — switching back to the upstream
+// Analyzer's bare `unchecked error` message would break the preset
+// and resurrect the 277-diagnostic errcheck divergence measured on
+// the reference corpus.
 func TestErrcheckAnalyzer_MessageFormat(t *testing.T) {
 	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
 		"a/a.go": `package a
@@ -53,7 +54,7 @@ func Close() {
 }
 
 // TestErrcheckAnalyzer_StdHandling_ClosePassesPreset asserts that the
-// emitted message text passes the c1 std-error-handling exclusion
+// emitted message text passes the std-error-handling exclusion
 // preset regex. The preset is wired in
 // internal/exclusion/presets.go::ExclusionPresetStdErrorHandling and
 // is the same regex golangci-lint v2 ships at master 72798d3.

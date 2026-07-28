@@ -161,8 +161,8 @@ var V4 a.T4
 }
 
 // TestCascadeEdit_NoPanic5of5 is a 5-trial harness around
-// TestFactsEncode_NoRaceOnConcurrentScope. The c1 cascade-edit repro
-// panics 4/5 trials at GOMAXPROCS=8; this test asserts the
+// TestFactsEncode_NoRaceOnConcurrentScope. The monorepo-scale cascade-edit
+// repro panics 4/5 trials at GOMAXPROCS=8; this test asserts the
 // synthetic fixture passes 5/5 under -race. It is a regression gate for the
 // typesyncmu coupling.
 func TestCascadeEdit_NoPanic5of5(t *testing.T) {
@@ -178,9 +178,9 @@ func TestCascadeEdit_NoPanic5of5(t *testing.T) {
 }
 
 // TestReadExportData_NoRaceVsBuildirReader covers a further writer site. After
-// the earlier fix closed the facts.Encode → objectpath.For panic site, c1
-// cascade still tripped buildir → ir.Program.CreatePackage → Scope.Names →
-// Scope.Lookup 4/5 trials. The remaining writer lived in
+// the earlier fix closed the facts.Encode → objectpath.For panic site, the
+// monorepo cascade still tripped buildir → ir.Program.CreatePackage →
+// Scope.Names → Scope.Lookup 4/5 trials. The remaining writer lived in
 // clcache.ReadExportData → x/tools internal/gcimporter (a different fork
 // from internal/gopls/internal/gcimporter, which the prior fix already
 // gated): both iimport.go's importReader.declare and ureader.go's per-decl

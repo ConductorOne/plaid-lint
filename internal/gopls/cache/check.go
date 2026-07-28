@@ -567,7 +567,7 @@ func (b *typeCheckBatch) query(ctx context.Context, syntaxIDs []PackageID, pre p
 // "cannot use X as X" errors. Under GC + CPU pressure those errors flipped
 // apkg.compiles to false intermittently; without
 // pressure they were rare-enough on small workspaces that the earlier "ship
-// deferred" call held until c1-scale broke it.
+// deferred" call held until monorepo-scale workloads broke it.
 func (b *typeCheckBatch) getImportPackage(ctx context.Context, id PackageID) (pkg *types.Package, err error) {
 	return b.importPackages.get(ctx, id, func(ctx context.Context) (*types.Package, error) {
 		ph := b.getHandle(id)

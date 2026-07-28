@@ -17,8 +17,9 @@ import (
 )
 
 // writeTrapFiles seeds a workspace with the four trap-file shapes
-// that surfaced Blocker 1 against c1: a `.git/logs/refs/...` reflog
-// whose name ends in `.go` (zero-byte, parser-tripping); a
+// that surfaced Blocker 1 against a real monorepo: a
+// `.git/logs/refs/...` reflog whose name ends in `.go` (zero-byte,
+// parser-tripping); a
 // `vendor/...` Go file with broken syntax; a `testdata/...` Go file
 // with broken syntax; and a `.idea/...` IDE-state Go file. Used by
 // every package-main subprocess wrap runner's "ignores trap files"
@@ -226,7 +227,7 @@ func TestChunkedInvoke_MultiChunkPreservesOrder(t *testing.T) {
 }
 
 func TestChunkedInvoke_DoesNotHitE2BIG(t *testing.T) {
-	// note: synthetic; real c1 reproduces at ~10K files. This
+	// note: synthetic; a real monorepo reproduces at ~10K files. This
 	// fixture's 20K args at ~30 bytes each = ~600 KiB total argv —
 	// past the ARG_MAX threshold on small-EnvVars hosts (CI). Without
 	// chunkedInvoke, exec returns E2BIG; with it, each invocation
@@ -239,7 +240,7 @@ func TestChunkedInvoke_DoesNotHitE2BIG(t *testing.T) {
 	}
 	res := chunkedInvoke(context.Background(), bin, "", nil, nil, args)
 	if res.err != nil {
-		t.Fatalf("chunkedInvoke errored on c1-scale input (E2BIG?): %v", res.err)
+		t.Fatalf("chunkedInvoke errored on monorepo-scale input (E2BIG?): %v", res.err)
 	}
 	lines := strings.Split(strings.TrimRight(string(res.stdout), "\n"), "\n")
 	if len(lines) != n {
@@ -267,8 +268,8 @@ func TestChunkedInvoke_PropagatesNonZeroExit(t *testing.T) {
 
 // seedLargeWorkspace adds n synthetic `.go` files under root, each
 // at a deep path so the joined argv would exceed ARG_MAX without
-// chunking / stdin. note: synthetic; real c1 reproduces at ~10K
-// files. The default n=1500 at ~120 byte paths totals ~180 KiB —
+// chunking / stdin. note: synthetic; a real monorepo reproduces at
+// ~10K files. The default n=1500 at ~120 byte paths totals ~180 KiB —
 // past the 96 KiB chunk budget so the chunked runners must split.
 func seedLargeWorkspace(t *testing.T, root string, n int, contents string) {
 	t.Helper()

@@ -99,8 +99,8 @@ func enumerateGoFiles(root string) ([]string, error) {
 // argv strings handed to a single chunked invocation. Linux's
 // ARG_MAX is ~2 MiB (kernel) less ~128 KiB of environment, so 96
 // KiB leaves comfortable headroom for the binary path, flags, and
-// any env grown by callers. On c1 (~10K Go files, avg path ~92 B)
-// the unchunked argv was ~800 KiB and tripped E2BIG.
+// any env grown by callers. On a large monorepo (~10K Go files, avg
+// path ~92 B) the unchunked argv was ~800 KiB and tripped E2BIG.
 const argvChunkBudgetBytes = 96 * 1024
 
 // chunkArgv splits a positional-arg slice into chunks so each chunk's
@@ -149,7 +149,7 @@ type chunkedInvokeResult struct {
 // chunkedInvoke invokes binary once per [chunkArgv] chunk under cwd
 // with env extension, passing [flags...positional_chunk] as argv.
 // Used by every wrap runner whose upstream CLI takes positional file
-// or directory args — the file walk in c1-scale workspaces produces
+// or directory args — the file walk in monorepo-scale workspaces produces
 // argv larger than ARG_MAX, so the file list is split into chunks
 // and the per-chunk outputs are stitched.
 //

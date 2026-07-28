@@ -9,7 +9,7 @@
 // needs a cleaned copy of the config.
 //
 // Equivalent to the python heredoc previously inlined in
-// scripts/compare-against-c1.sh:
+// scripts/compare-against-monorepo.sh:
 //
 //   - remove linters.settings.custom
 //   - drop "tracecheck" from linters.enable and linters.disable
