@@ -14,6 +14,7 @@ import (
 
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/exclusion"
+	"github.com/conductorone/plaid-lint/internal/quiet"
 	"github.com/conductorone/plaid-lint/internal/registry"
 	"github.com/conductorone/plaid-lint/internal/unit"
 )
@@ -45,6 +46,20 @@ func (a *app) runUnit(args []string) int {
 	if g.Help {
 		printUnitHelp(a.stdout)
 		return exitSuccess
+	}
+
+	// Install the stderr filter before any analysis runs — the same
+	// default-quiet behavior `run` has. The `unused` wrapper calls
+	// upstream `honnef.co/go/tools`'s `SerializedGraph.Merge`, whose
+	// `unused/serialize.go:trace()` writes "new node, remapping X -> Y"
+	// and "deduplicating ..." to os.Stderr unconditionally — millions of
+	// lines per uncached Bazel action. Installing here (before the
+	// worker dispatch) covers both the one-shot and --worker persistent
+	// modes; `--quiet=false` (or leaving LOG_LEVEL unset after passing
+	// --quiet=false) is the escape hatch, exactly as in `run`.
+	if g.Quiet || quiet.FromEnv() {
+		restore := quiet.Install()
+		defer restore()
 	}
 	if *workerMode || *persistentWorker {
 		return a.runUnitWorker()
@@ -230,7 +245,10 @@ Flags:
       --worker       run as a Bazel persistent worker: read one JSON
                      WorkRequest per line on stdin (arguments:
                      ["--cfg", <path>]), write one JSON WorkResponse
-                     per line on stdout`)
+                     per line on stdout
+      --quiet        suppress upstream debug-trace output on stderr
+                     (default true; pass --quiet=false to see honnef's
+                     'new node, remapping' / 'deduplicating' lines)`)
 }
 
 // mustGetwd returns the working directory; the empty string on

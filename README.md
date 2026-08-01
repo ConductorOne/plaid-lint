@@ -208,6 +208,48 @@ Semantics:
   breaks a plain build.
 - **`ignore_linters`** prints but never fails on the named linters' findings.
 
+### Adopting in a large monorepo
+
+Patterns proven on a ~2,000-package repo (28k-action cold suite in ~12.5 min,
+fully cached and incremental after that):
+
+- **Exclude generated trees with `facts_only`.** Checked-in generated code
+  (protoc/plugin output such as `pkg/pb/**`) is not auto-detected — only
+  Bazel-*generated* files are. Configure the import-path prefix:
+
+  ```text
+  common --@plaid_lint//bazel:facts_only=example.com/yourmodule/pkg/pb
+  ```
+
+  The flag is repeatable and matches whole path segments (`pkg/pb` covers
+  `pkg/pb/...`, never `pkg/pbx`). `facts_only` packages still produce facts for
+  their importers — cross-package analysis (printf wrappers, `unused`
+  supersession) is unaffected — but they are **never lint subjects and can
+  never gate the suite**: both the per-target validation and the suite verdict
+  only consume `mode == "full"` reports (pinned by e2e assertion (p)). A
+  package's test archives are covered too, whatever namespace rules_go
+  synthesizes their importpaths in (`<importpath>_test` for embed-based tests,
+  label-derived paths for no-embed tests): test archives also match by their
+  label package, bare and module-qualified.
+- **A dedicated, narrower config is fine.** The suite reads whatever
+  `--@plaid_lint//bazel:config` names; an `unused`-only config for the
+  aggregate gate while per-target validation runs the full set (or vice versa)
+  is a supported shape — configs bind per invocation, not per rule.
+- **Listing generated `go_test` roots may need lint-scoped visibility relief.**
+  Gazelle-generated test targets are private; a suite in `//bazel/lint` cannot
+  see them. Scope the relief to the lint config so normal builds keep
+  enforcement: `test:lint --check_visibility=false` (or grant visibility on the
+  test targets).
+- **Platform-incompatible roots must be excluded by the caller.** If any
+  `targets` entry is incompatible with the target platform (e.g. a wasm-only
+  binary), Bazel marks the whole suite test SKIPPED — that is Bazel's
+  `target_compatible_with` contract for tests, not a plaid-lint decision, and
+  aspects cannot filter it away. Keep such roots out of `targets` (or wrap the
+  list in a `select()` keyed on the platform).
+- **Non-Go targets in `targets` are a loud analysis error**, never a silent
+  scope reduction. If a wrapper macro hands the suite a non-`GoArchive` target,
+  the build fails naming it.
+
 See [examples/bazel](examples/bazel) for a complete consumer workspace — seeded
 findings, worker variant, module lint — exercised end to end by its `e2e.sh`.
 

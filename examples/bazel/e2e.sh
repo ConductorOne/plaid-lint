@@ -262,4 +262,84 @@ run test //:lint --norun_validations
 [[ "$CODE" -ne 0 ]] || fail "(o) --norun_validations must not disable the suite gate"
 pass "(o) suite verdict stable under --keep_going and --norun_validations"
 
+# (p) facts_only packages cannot gate: with unusedpkg configured
+# facts_only (the generated-tree exclusion, e.g. a monorepo's checked
+# in protoc output), its unused findings vanish from the suite while
+# every other finding still enforces. Its facts still flow to
+# importers — mode only controls lint-subject status.
+TESTLOG_P="$("$BAZEL" info bazel-testlogs)/lint/test.log"
+run test //:lint --@plaid_lint//bazel:facts_only=example.com/plaidexample/unusedpkg
+[[ "$CODE" -ne 0 ]] || fail "(p) suite must stay red on the non-excluded findings"
+grep -q "FAIL — 3 enforced finding(s)" "$TESTLOG_P" || fail "(p) expected exactly 3 enforced findings with unusedpkg facts_only"
+if grep -q "unusedpkg" "$TESTLOG_P"; then
+  fail "(p) facts_only package findings leaked into the suite gate"
+fi
+pass "(p) facts_only packages produce facts but can never gate the suite"
+
+# (q) All-external-test targets (go_test with only package foo_test
+# sources and no embed — the c1 //pkg/ssf/caep shape): the internal
+# archive's inferred importpath also ends in _test, so classification
+# must key on source.testfilter or both archives collide on the
+# .xtest output names at analysis time.
+run build --config=lint //xtestonly:xtestonly_test
+[[ "$CODE" -eq 0 ]] || fail "(q) all-external-test target failed lint analysis/build: $OUT"
+[[ -f "$BAZEL_BIN/xtestonly/xtestonly_test.xtest.plaid.sarif" ]] || fail "(q) external test archive was not linted"
+[[ -f "$BAZEL_BIN/xtestonly/xtestonly_test.internal.plaid.sarif" ]] || fail "(q) internal archive missing its (empty) lint output"
+pass "(q) all-external-test go_test lints cleanly; testfilter-keyed archive classification"
+
+# (r) Stderr noise suppression: a PlaidLint action must not leak
+# honnef.co/go/tools' unused debug traces ("new node, remapping X ->
+# Y", "deduplicating ...") into the build output — an unused-enabled
+# suite once emitted millions of such lines (71.7 MB of stderr) per
+# uncached run. Bazel echoes a successful action's stderr under an
+# "INFO: From PlaidLint" header, so the combined output is exactly
+# where a leak would surface. A content change to lib.go forces a
+# fresh (non-cached) compile + PlaidLint execution — cheap, and the
+# process summary proves the action really ran rather than the
+# assertion passing vacuously against a cache hit.
+LIB_SRC="lib/lib.go"
+cp "$LIB_SRC" "$LIB_SRC.e2e-bak"
+trap '[[ -f "$LIB_SRC.e2e-bak" ]] && mv "$LIB_SRC.e2e-bak" "$LIB_SRC"' EXIT
+printf '\n// e2e(r): content change forcing a fresh PlaidLint execution\n' >>"$LIB_SRC"
+run build --config=lint --norun_validations //lib:lib
+mv "$LIB_SRC.e2e-bak" "$LIB_SRC"
+[[ "$CODE" -eq 0 ]] || fail "(r) expected report-only lint of the touched //lib:lib to succeed"
+SUMMARY="$(grep -E '^INFO: [0-9]+ process(es)?:' <<<"$OUT" || true)"
+grep -qE 'sandbox|worker|\blocal\b|standalone' <<<"$SUMMARY" \
+  || fail "(r) expected the touched build to execute actions (got summary: ${SUMMARY:-<none>}); the noise assertion would be vacuous"
+if grep -q "new node, remapping" <<<"$OUT"; then
+  fail "(r) PlaidLint action leaked 'new node, remapping' debug traces into the build output"
+fi
+if grep -q "deduplicating " <<<"$OUT"; then
+  fail "(r) PlaidLint action leaked 'deduplicating' debug traces into the build output"
+fi
+pass "(r) fresh PlaidLint execution emits no honnef unused debug traces"
+
+# (s) Build-constraint file selection (the c1 //pkg/randkey shape):
+# //tagged declares tagged_arm64.go (//go:build arm64) and
+# tagged_noasm.go (//go:build !arm64), both defining the same private
+# helper. GoCompilePkg selects one at action time; the unit driver
+# must apply the same selection or it type-checks both and reports a
+# spurious "hexExpand redeclared" finding that fails the lint gate.
+# Must hold on EITHER host arch, so no arch is assumed here.
+run build --config=lint //tagged:tagged
+[[ "$CODE" -eq 0 ]] || fail "(s) expected lint build of //tagged:tagged to succeed on this host arch: $OUT"
+if grep -q "redeclared" <<<"$OUT"; then
+  fail "(s) constraint-excluded file leaked into type-checking (redeclared finding)"
+fi
+TAGGED_SARIF="$BAZEL_BIN/tagged/tagged.plaid.sarif"
+run build --config=lint --norun_validations //tagged:tagged
+[[ -f "$TAGGED_SARIF" ]] || fail "(s) expected SARIF report at $TAGGED_SARIF"
+grep -q "redeclared" "$TAGGED_SARIF" && fail "(s) redeclared finding present in $TAGGED_SARIF"
+# Exactly ONE of the mutually exclusive files may appear in the run's
+# analyzed-file identity, whichever arch this host builds for.
+python3 - "$TAGGED_SARIF" <<'PY' || fail "(s) SARIF goFiles must contain exactly one of tagged_arm64.go/tagged_noasm.go"
+import json, sys
+files = json.load(open(sys.argv[1]))["runs"][0]["properties"]["plaidUnit"]["goFiles"]
+names = [f.rsplit("/", 1)[-1] for f in files]
+impls = [n for n in names if n in ("tagged_arm64.go", "tagged_noasm.go")]
+sys.exit(0 if len(impls) == 1 and "tagged.go" in names else 1)
+PY
+pass "(s) //tagged lints cleanly: constraint-excluded file never reaches the type-checker"
+
 echo "OK: all e2e assertions passed"

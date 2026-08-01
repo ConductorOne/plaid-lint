@@ -1,0 +1,19 @@
+# Copyright 2026 The plaid-lint Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+load("@rules_go//go:def.bzl", "go_library")
+
+# Declares BOTH mutually exclusive implementation files; GoCompilePkg
+# (and the plaid unit driver) select the constraint-matching subset at
+# action time. See e2e.sh section (s).
+go_library(
+    name = "tagged",
+    srcs = [
+        "tagged.go",
+        "tagged_arm64.go",
+        "tagged_noasm.go",
+    ],
+    importpath = "example.com/plaidexample/tagged",
+    visibility = ["//visibility:public"],
+)

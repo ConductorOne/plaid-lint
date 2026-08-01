@@ -33,9 +33,15 @@ type checkedPackage struct {
 	parseErrs []error // scanner.ErrorList entries, one per file at most
 
 	// goFiles are the source paths actually analyzed, post
-	// test-filtering — the package's file-set identity for the SARIF
-	// run properties and the collect supersede rule.
+	// constraint- and test-filtering — the package's file-set
+	// identity for the SARIF run properties and the collect
+	// supersede rule.
 	goFiles []string
+
+	// ignoredFiles are declared sources excluded by build
+	// constraints; merged into analysis.Pass.IgnoredFiles alongside
+	// any config-declared ignored files.
+	ignoredFiles []string
 }
 
 // compiles reports whether the package parsed and type-checked
@@ -126,7 +132,19 @@ func typecheck(cfg *Config) (*checkedPackage, error) {
 	fset := token.NewFileSet()
 	cp := &checkedPackage{fset: fset}
 
-	for _, name := range cfg.Package.GoFiles {
+	// Build-constraint filtering mirrors the rules_go compile
+	// builder's file selection (see filterByConstraints): it runs
+	// before parsing — and therefore before the test filter below —
+	// so excluded files contribute neither declarations nor goFiles
+	// identity. A package whose files are ALL excluded proceeds like
+	// an empty-after-test-filter one: no findings, empty facts.
+	srcs, ignored, err := filterByConstraints(&cfg.Package)
+	if err != nil {
+		return nil, err
+	}
+	cp.ignoredFiles = ignored
+
+	for _, name := range srcs {
 		// ParseComments: nolint directives and several analyzers need
 		// them. No SkipObjectResolution: some analyzers still consult
 		// ast.Object scopes.

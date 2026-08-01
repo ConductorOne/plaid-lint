@@ -199,7 +199,7 @@ func runOne(cfg *Config, cp *checkedPackage, e analyzerEntry, inputs map[*analys
 		Fset:         cp.fset,
 		Files:        cp.files,
 		OtherFiles:   nil,
-		IgnoredFiles: cfg.Package.IgnoredFiles,
+		IgnoredFiles: ignoredFiles(cfg, cp),
 		Pkg:          cp.pkg,
 		TypesInfo:    cp.info,
 		TypesSizes:   cp.sizes,
@@ -246,6 +246,20 @@ func runOne(cfg *Config, cp *checkedPackage, e analyzerEntry, inputs map[*analys
 		return nil, nil, fmt.Errorf("internal error: result type %v, declared %v", got, want)
 	}
 	return result, diags, nil
+}
+
+// ignoredFiles combines the config-declared ignored sources with the
+// files the driver itself excluded by build constraints, preserving
+// analysis.Pass.IgnoredFiles semantics (sources present in the
+// package directory but not built).
+func ignoredFiles(cfg *Config, cp *checkedPackage) []string {
+	if len(cp.ignoredFiles) == 0 {
+		return cfg.Package.IgnoredFiles
+	}
+	out := make([]string, 0, len(cfg.Package.IgnoredFiles)+len(cp.ignoredFiles))
+	out = append(out, cfg.Package.IgnoredFiles...)
+	out = append(out, cp.ignoredFiles...)
+	return out
 }
 
 // decodeDepFacts builds the package's shared fact set from the

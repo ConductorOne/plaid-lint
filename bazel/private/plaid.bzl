@@ -148,18 +148,42 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
     # them because it hooks every compile; the aspect must reach them
     # explicitly. The internal archive's facts feed the external one
     # (foo_test imports foo, resolved to the internal archive).
+    #
+    # Classification uses source.testfilter — the same field rules_go's
+    # emit_archive keys its own .internal.a/.external.a artifact names
+    # on ("exclude" = internal, "only" = external). Importpath is NOT a
+    # discriminator: a go_test with only external _test.go sources and
+    # no embed infers its internal archive's importpath from the label
+    # (".../caep_test"), which also ends in "_test" and previously
+    # misfiled it as a second external archive — colliding on the
+    # .xtest output names. Identical archives reached through two dep
+    # edges are deduplicated by export file; genuinely distinct
+    # same-class archives (future rules_go shapes) get enumerated
+    # suffixes rather than colliding.
     if ctx.rule.kind == "go_test":
         own = [d for d in archive.direct if d.data.label == target.label]
-        internal = [d for d in own if not d.data.importpath.endswith("_test")]
-        external = [d for d in own if d.data.importpath.endswith("_test")]
+        internal = []
+        external = []
+        seen_exports = {}
+        for d in own:
+            if d.data.export_file and d.data.export_file.path in seen_exports:
+                continue
+            if d.data.export_file:
+                seen_exports[d.data.export_file.path] = None
+            if getattr(d.source, "testfilter", None) == "only":
+                external.append(d)
+            else:
+                internal.append(d)
         test_by_key = dict(by_key)
-        for d in internal:
-            res = _lint_archive(env, target, d, base_name + ".internal", test_by_key)
+        for i, d in enumerate(internal):
+            suffix = ".internal" if i == 0 else ".internal.%d" % i
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key)
             if res:
                 lints.append(res)
                 test_by_key[_pkg_key(d.data)] = res.facts
-        for d in external:
-            res = _lint_archive(env, target, d, base_name + ".xtest", test_by_key)
+        for i, d in enumerate(external):
+            suffix = ".xtest" if i == 0 else ".xtest.%d" % i
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key)
             if res:
                 lints.append(res)
 
@@ -245,8 +269,33 @@ def _lint_archive(env, target, archive, base_name, by_key):
     # subjects (nogo's includes/excludes semantics). Likewise archives
     # made entirely of generated files (rules_go's synthesized
     # testmain, protoc output): build machinery, not lint subjects.
+    #
+    # A facts_only prefix covering a package must cover its test
+    # variants too, and test-archive importpaths live in synthesized
+    # namespaces: an embed-based go_test appends "_test"
+    # (".../unusedpkg_test"), while a no-embed go_test derives BOTH
+    # archives' importpaths from the label with NO module prefix
+    # ("pkg/ssf/caep/caep_test", "..._test_test"). So test archives
+    # (the only ones carrying a testfilter) additionally match by
+    # trimmed "_test" suffixes AND by their label package — bare and
+    # module-qualified — which is exactly the directory a facts_only
+    # tree entry names. Non-test archives match by their canonical
+    # importpath only.
+    match_paths = [data.importpath]
+    if getattr(archive.source, "testfilter", None) in ("exclude", "only"):
+        p = data.importpath
+        for _ in range(2):
+            if not p.endswith("_test"):
+                break
+            p = p[:-len("_test")]
+            match_paths.append(p)
+        pkg_dir = target.label.package
+        if pkg_dir:
+            match_paths.append(pkg_dir)
+            if env.module_path:
+                match_paths.append(env.module_path + "/" + pkg_dir)
     mode = "full"
-    if _is_external(target) or _matches_prefix(data.importpath, env.facts_only):
+    if _is_external(target) or any([_matches_prefix(p, env.facts_only) for p in match_paths]):
         mode = "facts_only"
     if not any([s.is_source for s in srcs]):
         mode = "facts_only"
@@ -302,6 +351,18 @@ def _lint_archive(env, target, archive, base_name, by_key):
     test_filter = getattr(archive.source, "testfilter", None)
     if test_filter in ("only", "exclude"):
         unit_cfg["package"]["test_filter"] = test_filter
+
+    # Build tags: the same set GoCompilePkg's -tags gets (gotags +
+    # race/msan implieds; see rules_go go/private/context.bzl). The
+    # driver evaluates build constraints against them so its file
+    # selection matches the compile action's.
+    if env.go.mode.tags:
+        unit_cfg["package"]["tags"] = list(env.go.mode.tags)
+    # CGO_ENABLED for the compile actions: rules_go's pure mode off
+    # means cgo is available. The driver mirrors the builder's cgo
+    # file selection from this.
+    if not env.go.mode.pure:
+        unit_cfg["package"]["cgo"] = True
     if env.config:
         unit_cfg["analysis"]["config"] = env.config.files.to_list()[0].path
     if env.module_path:
