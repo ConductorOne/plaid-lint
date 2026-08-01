@@ -58,6 +58,10 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 		defer exclStream.Finish()
 	}
 
+	var (
+		analyzedFiles []string
+		compiled      = true
+	)
 	switch cfg.EffectiveMode() {
 	case ModeModule:
 		md, err := runModuleMode(cfg, golangci, reg)
@@ -71,8 +75,10 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 		if err != nil {
 			return nil, err
 		}
+		analyzedFiles = cp.goFiles
+		compiled = cp.compiles()
 
-		if !cp.compiles() {
+		if !compiled {
 			// A package that does not compile is a result, not an
 			// infrastructure failure: report syntax/type errors as
 			// `typecheck` findings (golangci semantics) and skip
@@ -117,7 +123,7 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 	res.Diagnostics = diags
 
 	// Write declared outputs. SARIF first (always named), then facts.
-	if err := writeSarif(cfg, res.Diagnostics); err != nil {
+	if err := writeSarif(cfg, res.Diagnostics, analyzedFiles, compiled); err != nil {
 		return nil, err
 	}
 	if cfg.Out.Facts != "" {
@@ -232,13 +238,10 @@ func typecheckDiagnostics(cp *checkedPackage) []output.Diagnostic {
 	return diags
 }
 
-// writeSarif writes the SARIF output, stamping the run's property
-// bag with the unit's identity (package path, mode, analyzed file
-// set) so a downstream collector can aggregate across actions —
-// e.g. the unused test-variant supersede rule needs to know which
-// runs analyzed strict supersets of which file sets.
-func writeSarif(cfg *Config, diags []output.Diagnostic) error {
-	buf, err := renderSarif(cfg, diags)
+// writeSarif writes the SARIF output; see renderSarif for the
+// identity property bag.
+func writeSarif(cfg *Config, diags []output.Diagnostic, analyzedFiles []string, compiled bool) error {
+	buf, err := renderSarif(cfg, diags, analyzedFiles, compiled)
 	if err != nil {
 		return fmt.Errorf("unit: render sarif: %w", err)
 	}
@@ -248,15 +251,20 @@ func writeSarif(cfg *Config, diags []output.Diagnostic) error {
 	return nil
 }
 
-// renderSarif serializes diagnostics via the shared SARIF printer.
-func renderSarif(cfg *Config, diags []output.Diagnostic) ([]byte, error) {
+// renderSarif serializes diagnostics via the shared SARIF printer,
+// stamping the run's identity: package path, mode, the file set
+// actually analyzed (post test-filtering), and whether the package
+// compiled. The collect supersede rule consumes all four — a run
+// that did not compile analyzed nothing and must never supersede.
+func renderSarif(cfg *Config, diags []output.Diagnostic, analyzedFiles []string, compiled bool) ([]byte, error) {
 	var b safeBuffer
 	p := output.NewSarif(&b)
 	p.SetRunProperties(map[string]any{
 		"plaidUnit": map[string]any{
-			"package": cfg.Package.Path,
-			"mode":    string(cfg.EffectiveMode()),
-			"goFiles": cfg.Package.GoFiles,
+			"package":  cfg.Package.Path,
+			"mode":     string(cfg.EffectiveMode()),
+			"goFiles":  analyzedFiles,
+			"compiles": compiled,
 		},
 	})
 	if err := p.Print(diags); err != nil {

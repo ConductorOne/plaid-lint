@@ -441,6 +441,13 @@ func normalizeReviveArgValue(v any) any {
 			out[i] = normalizeReviveArgValue(e)
 		}
 		return out
+	case int:
+		// yaml.v3 decodes integer scalars as int, but revive's rule
+		// Configure methods type-assert int64 — the shape golangci's
+		// TOML round-trip produces. Without this, numeric-argument
+		// rules (line-length-limit, cyclomatic, argument-limit, …)
+		// fail configuration ("invalid value passed as argument").
+		return int64(m)
 	default:
 		return v
 	}

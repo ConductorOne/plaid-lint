@@ -1,2 +1,6 @@
 build:lint --aspects=//tools/lint:linters.bzl%plaid
 build:lint --output_groups=+plaid_report
+
+# Aggregate suite configuration (plaid_lint_suite_test).
+common --@plaid_lint//bazel:config=//:.golangci.yml
+common --@plaid_lint//bazel:module_path=example.com/plaidexample

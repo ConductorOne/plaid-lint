@@ -90,6 +90,14 @@ type PackageConfig struct {
 	// GoVersion is the language version the package compiles under,
 	// e.g. "1.26". Sets types.Config.GoVersion when non-empty.
 	GoVersion string `json:"go_version,omitempty"`
+
+	// TestFilter mirrors the rules_go compile builder's -testfilter
+	// flag for go_test archives whose declared sources span both the
+	// internal and external test package: "exclude" keeps files whose
+	// package clause does not end in _test (the internal archive),
+	// "only" keeps files whose package clause does (the external
+	// archive), "" / "off" keeps everything.
+	TestFilter string `json:"test_filter,omitempty"`
 }
 
 // DepsConfig names the dependency artifacts.
@@ -182,6 +190,11 @@ func (c *Config) validate() error {
 	case "", ModeFull, ModeFactsOnly, ModeModule:
 	default:
 		return fmt.Errorf("unknown analysis.mode %q", c.Analysis.Mode)
+	}
+	switch c.Package.TestFilter {
+	case "", "off", "only", "exclude":
+	default:
+		return fmt.Errorf("unknown package.test_filter %q", c.Package.TestFilter)
 	}
 	mode := c.EffectiveMode()
 	if mode == ModeModule {

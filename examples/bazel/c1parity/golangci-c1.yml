@@ -1,0 +1,91 @@
+# C1-parity fixture config: the SHAPE of C1's .golangci.yml (version 2,
+# default none, the same settings classes) with example.com paths.
+# Consumed by //c1parity:c1parity_lint via
+#   --@plaid_lint//bazel:config=//c1parity:golangci-c1.yml
+# (see e2e_c1parity.sh). Deliberately NOT C1's literal file.
+version: "2"
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - exhaustive
+    - forbidigo
+    - gocritic
+    - gomoddirectives
+    - gosec
+    - govet
+    - ineffassign
+    - nolintlint
+    - revive
+    - staticcheck
+    - tracecheck
+    - unconvert
+    - unused
+  settings:
+    depguard:
+      rules:
+        deny-forbidden:
+          deny:
+            - pkg: "example.com/plaidexample/c1parity/internal/forbidden"
+              desc: "Do not import the forbidden package; it exists only to be denied"
+    exhaustive:
+      default-signifies-exhaustive: true
+    forbidigo:
+      forbid:
+        - pattern: 'fmt\.Print.*'
+          msg: >
+            fmt.Print* writes to stdout; use a logger instead (parity
+            fixture for C1's path-scoped forbidigo rules).
+    gocritic:
+      disabled-checks:
+        - commentFormatting
+        - ifElseChain
+        - singleCaseSwitch
+    gomoddirectives:
+      replace-allow-list:
+        - example.com/allowed
+      replace-local: true
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-no-explanation:
+        - forbidigo
+        - tracecheck
+    revive:
+      severity: error
+      rules:
+        - name: atomic
+        - name: line-length-limit
+          arguments:
+            - 200
+        - name: unhandled-error
+          arguments:
+            - "fmt.(P|Fp)rint(f|ln)?"
+  exclusions:
+    generated: lax
+    # C1's preset set. common-false-positives is load-bearing for the
+    # nolint fixture: it drops gosec's G104 (duplicated errcheck), so
+    # the //nolint:errcheck line is judged by errcheck + the directive
+    # alone — the same way C1's own config behaves.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Test files may use forbidden output helpers and relaxed
+      # security patterns, mirroring C1's _test exclusions.
+      - linters:
+          - forbidigo
+          - gosec
+        path: _test\.go
+    paths:
+      - third_party$
+issues:
+  max-same-issues: 50

@@ -47,3 +47,5 @@ jobs:
         run: bazel build //...
       - name: Example e2e
         run: cd examples/bazel && ./e2e.sh
+      - name: C1-shaped config parity e2e
+        run: cd examples/bazel && ./e2e_c1parity.sh

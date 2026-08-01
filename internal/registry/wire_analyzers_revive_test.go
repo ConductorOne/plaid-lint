@@ -212,6 +212,35 @@ func TestRevive_Arguments_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestRevive_Arguments_YamlInt_Normalized pins the yaml.v3 numeric
+// shape: the config loader decodes `arguments: [200]` as int, but
+// revive's Configure methods type-assert int64 (the shape golangci's
+// TOML round-trip produces). The normalizer must widen int → int64 or
+// numeric-argument rules (line-length-limit, cyclomatic, …) fail with
+// "invalid value passed as argument". Regression for the C1-parity
+// config's `line-length-limit: [200]`.
+func TestRevive_Arguments_YamlInt_Normalized(t *testing.T) {
+	conf, err := translateReviveConfig(&config.ReviveSettings{
+		Rules: []config.ReviveRule{
+			{Name: "line-length-limit", Arguments: []any{200}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("translateReviveConfig: %v", err)
+	}
+	rc, ok := conf.Rules["line-length-limit"]
+	if !ok {
+		t.Fatal(`Rules missing "line-length-limit"`)
+	}
+	got, ok := rc.Arguments[0].(int64)
+	if !ok {
+		t.Fatalf("Arguments[0] type = %T, want int64 (post-normalize)", rc.Arguments[0])
+	}
+	if got != 200 {
+		t.Errorf("Arguments[0] = %d, want 200", got)
+	}
+}
+
 // TestRevive_Arguments_MapAny_Normalized verifies the landmine-28
 // defensive case: if a yaml.v2-shaped argument (map[any]any) sneaks in,
 // the normalizer converts it to map[string]any (the shape revive's

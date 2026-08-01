@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "unusedpkg",
+    srcs = ["unusedpkg.go"],
+    importpath = "example.com/plaidexample/unusedpkg",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "unusedpkg_test",
+    visibility = ["//visibility:public"],
+    srcs = [
+        "unusedpkg_test.go",
+        "xtra_test.go",
+    ],
+    embed = [":unusedpkg"],
+)

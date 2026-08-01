@@ -1,0 +1,2 @@
+version: [this is not a valid golangci config
+linters: {{{

@@ -1,0 +1,43 @@
+load("@plaid_lint//bazel:defs.bzl", "plaid_lint_suite_test")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+# The C1-SHAPED fixture config, consumed through the global build
+# setting: --@plaid_lint//bazel:config=//c1parity:golangci-c1.yml
+# (settings are configuration-wide, so this suite runs in its own
+# bazel invocation — see e2e_c1parity.sh).
+exports_files(
+    ["golangci-c1.yml"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "c1parity",
+    srcs = ["c1parity.go"],
+    importpath = "example.com/plaidexample/c1parity",
+    visibility = ["//visibility:public"],
+    deps = ["//c1parity/internal/forbidden"],
+)
+
+go_test(
+    name = "c1parity_test",
+    srcs = ["c1parity_test.go"],
+    embed = [":c1parity"],
+    visibility = ["//visibility:public"],
+)
+
+# The C1-parity aggregate gate (deliberately RED: it must surface
+# exactly the seeded tracecheck, depguard, forbidigo, exhaustive, and
+# unused findings — see e2e_c1parity.sh). go_mod is OMITTED: the
+# workspace go.mod carries a seeded BAD replace for //:lint's
+# gomoddirectives coverage; module semantics are proven there, and
+# including it here would drag that unrelated finding into the parity
+# surface.
+plaid_lint_suite_test(
+    name = "c1parity_lint",
+    tags = ["manual"],  # red by design; run explicitly from e2e_c1parity.sh
+    targets = [
+        ":c1parity",
+        ":c1parity_test",
+        "//c1parity/internal/forbidden",
+    ],
+)

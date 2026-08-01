@@ -44,11 +44,19 @@ plaid_module_lint — see that rule's doc.
 load(
     "//bazel/private:plaid.bzl",
     _PlaidFactsInfo = "PlaidFactsInfo",
+    _PlaidLintInfo = "PlaidLintInfo",
+    _PlaidReportInfo = "PlaidReportInfo",
     _make_plaid_lint_aspect = "make_plaid_lint_aspect",
+    _plaid_lint_suite_aspect = "plaid_lint_suite_aspect",
+    _plaid_lint_suite_test = "plaid_lint_suite_test",
     _plaid_module_lint = "plaid_module_lint",
 )
 
 PlaidFactsInfo = _PlaidFactsInfo
+
+PlaidLintInfo = _PlaidLintInfo
+
+PlaidReportInfo = _PlaidReportInfo
 
 plaid_module_lint = _plaid_module_lint
 
@@ -105,3 +113,43 @@ def plaid_lint_aspect(
         use_worker = use_worker,
         output_suffix = output_suffix,
     )
+
+# The aggregate-enforcement path. plaid_lint_suite_test is a test
+# rule: it carries plaid_lint_suite_aspect on its `targets` attribute
+# (report-only per target), aggregates every report through the typed
+# PlaidLintInfo provider, applies the test-variant unused supersede
+# rule (an in-package test archive analyzing a strict superset of its
+# library's files invalidates the library run's `unused` findings),
+# and fails on what survives. This is how `unused` is enforced with
+# test-awareness and without whole-repository reachability analysis —
+# a per-target aspect alone cannot do it, because it never sees
+# reverse-dependent test archives.
+#
+# Aspects carried on rule attributes must be top-level values of
+# their defining .bzl file, so — unlike plaid_lint_aspect above — the
+# suite path is configured through build settings, set once in the
+# consumer's .bazelrc:
+#
+#   common --@plaid_lint//bazel:config=//:.golangci.yml
+#   common --@plaid_lint//bazel:module_path=example.com/mod
+#   # optional: --@plaid_lint//bazel:facts_only=example.com/mod/gen
+#   # optional: --@plaid_lint//bazel:use_worker=true
+#
+# and one BUILD target:
+#
+#   load("@plaid_lint//bazel:defs.bzl", "plaid_lint_suite_test")
+#   plaid_lint_suite_test(
+#       name = "lint",
+#       targets = [...top-level Go targets...],
+#       go_mod = "//:go.mod",
+#       module_path = "example.com/mod",
+#   )
+#
+# `bazel test //:lint` enforces; `bazel build //:lint` produces the
+# aggregate SARIF + text report without enforcing. Failure classes
+# stay distinct: findings fail the TEST; an unreadable report or
+# analyzer crash fails the PlaidCollect ACTION (a build error); a bad
+# .golangci config fails the PlaidLint actions themselves.
+plaid_lint_suite_test = _plaid_lint_suite_test
+
+plaid_lint_suite_aspect = _plaid_lint_suite_aspect

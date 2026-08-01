@@ -14,6 +14,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"golang.org/x/tools/go/gcexportdata"
@@ -30,6 +31,11 @@ type checkedPackage struct {
 	imports   map[string]*types.Package // shared gcexportdata package map
 	typeErrs  []types.Error
 	parseErrs []error // scanner.ErrorList entries, one per file at most
+
+	// goFiles are the source paths actually analyzed, post
+	// test-filtering — the package's file-set identity for the SARIF
+	// run properties and the collect supersede rule.
+	goFiles []string
 }
 
 // compiles reports whether the package parsed and type-checked
@@ -139,7 +145,26 @@ func typecheck(cfg *Config) (*checkedPackage, error) {
 				continue
 			}
 		}
+		// Test filtering mirrors the rules_go compile builder's
+		// applyTestFilter: a go_test's declared sources span the
+		// internal and external test packages, and each archive keeps
+		// only the files whose package clause matches its side of the
+		// _test suffix split.
+		if f.Name != nil {
+			isTestPkg := strings.HasSuffix(f.Name.Name, "_test")
+			switch cfg.Package.TestFilter {
+			case "only":
+				if !isTestPkg {
+					continue
+				}
+			case "exclude":
+				if isTestPkg {
+					continue
+				}
+			}
+		}
 		cp.files = append(cp.files, f)
+		cp.goFiles = append(cp.goFiles, name)
 	}
 
 	paths := map[string]string{}

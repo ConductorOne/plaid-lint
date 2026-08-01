@@ -9,6 +9,7 @@ go_library(
 
 go_test(
     name = "lib_test",
+    visibility = ["//visibility:public"],
     srcs = ["lib_test.go"],
     embed = [":lib"],
 )
