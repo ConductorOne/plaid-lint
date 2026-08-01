@@ -112,12 +112,45 @@ pass "(e) worker-mode SARIF is byte-identical to the default aspect's"
 
 # (f) go_test with an in-package test: lib_test.go lives in package
 # lib and is the only referent of lib.testOnly. The test target must
-# build, lint, and pass — the aspect must not lint rules_go's
-# generated testmain package (generated-only archives are facts_only)
-# and per-target validation must not enforce `unused` against
-# testOnly (default validation_ignore_linters).
+# build, lint, and pass — the aspect lints the internal and external
+# test archives (not rules_go's generated testmain, which is
+# facts_only as a generated-only archive), and per-target validation
+# must not enforce `unused` against testOnly (default
+# validation_ignore_linters).
 run test --config=lint //lib:lib_test
 [[ "$CODE" -eq 0 ]] || fail "(f) expected bazel test --config=lint //lib:lib_test to pass"
 pass "(f) go_test with in-package test lints and passes"
+
+# (g) Test-archive coverage + the collect supersede rule: linting
+# //lib:lib_test must produce SARIF for the internal test archive
+# (lib.go + lib_test.go), whose run supersedes the library run's
+# `unused` finding about testOnly when aggregated with collect —
+# the test-variant rule that per-target validation cannot apply.
+run build --config=lint --norun_validations //lib:lib //lib:lib_test
+[[ "$CODE" -eq 0 ]] || fail "(g) expected report-only test-archive build to succeed"
+INTERNAL_SARIF="$BAZEL_BIN/lib/lib_test.internal.plaid.sarif"
+[[ -f "$INTERNAL_SARIF" ]] || fail "(g) expected internal test-archive SARIF at $INTERNAL_SARIF"
+run build @plaid_lint//cmd/plaid-lint
+[[ "$CODE" -eq 0 ]] || fail "(g) expected @plaid_lint//cmd/plaid-lint to build"
+PLAID_REL="$("$BAZEL" cquery --output=files @plaid_lint//cmd/plaid-lint 2>/dev/null | head -1)"
+COLLECT_BIN="./$PLAID_REL"
+[[ -x "$COLLECT_BIN" ]] || fail "(g) could not locate the plaid-lint binary for collect (got: $PLAID_REL)"
+SUPERSEDE_OUT="$("$COLLECT_BIN" collect "$BAZEL_BIN/lib/lib.plaid.sarif" "$INTERNAL_SARIF" 2>&1 || true)"
+grep -q "superseded by test-variant runs" <<<"$SUPERSEDE_OUT" \
+  || fail "(g) expected the library's unused finding to be superseded; collect said: $SUPERSEDE_OUT"
+pass "(g) internal test archive is linted and supersedes the library's unused finding via collect"
+
+# (h) Worker fallback: a use_worker aspect's actions must run
+# correctly under a NON-worker strategy too (sandboxed here — the
+# same argv shape a remote executor would run). Bazel only rewrites
+# the argv into worker form when it actually launches a worker; the
+# one-shot fallback is `plaid-lint unit @flagfile`.
+run clean
+run build --aspects=//tools/lint:linters.bzl%plaid_worker \
+  --strategy=PlaidLint=sandboxed --output_groups=+plaid_report \
+  --norun_validations //lib:lib
+[[ "$CODE" -eq 0 ]] || fail "(h) expected worker-configured aspect to succeed under --strategy=PlaidLint=sandboxed"
+[[ -f "$BAZEL_BIN/lib/lib.worker.plaid.sarif" ]] || fail "(h) expected fallback run to produce SARIF"
+pass "(h) use_worker actions fall back to one-shot execution under non-worker strategies"
 
 echo "OK: all e2e assertions passed"

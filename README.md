@@ -142,6 +142,11 @@ everything it builds. What you get:
   findings are excluded from per-target validation by default (see the doc in
   `defs.bzl`); generated-only packages (e.g. rules_go's synthesized test main) and
   external-repository deps contribute facts but are not lint subjects.
+- **Test sources are covered.** A `go_test`'s internal and external test archives get
+  their own `PlaidLint` actions (rules_go's synthesized `testmain` does not). At
+  aggregation time, `plaid-lint collect` applies the test-variant supersede rule: the
+  internal archive analyzes a strict superset of the library's files, so the library
+  run's `unused` findings about test-only symbols are dropped.
 - **Persistent worker mode.** `plaid_lint_aspect(use_worker = True)` runs `PlaidLint`
   actions through Bazel's JSON persistent-worker protocol, amortizing process startup
   and config parsing across actions. Output is byte-identical to one-shot execution.

@@ -18,22 +18,32 @@ jobs:
       - name: Cache bazel
         uses: actions/cache@v4
         with:
-          path: ~/.cache/bazel
+          # Only the disk and repository caches — NOT ~/.cache/bazel
+          # wholesale, which is also Bazel's default output_user_root
+          # and would balloon every cache entry with multi-GB
+          # non-reusable output bases (see the startup flag below).
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repo
           key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'examples/bazel/MODULE.bazel.lock', '.bazelversion') }}
           restore-keys: |
             bazel-${{ runner.os }}-
       - name: Configure bazel caches
         # A user-level bazelrc reaches both workspaces this job builds
-        # (the repo root and examples/bazel). The disk and repository
-        # caches live under the ~/.cache/bazel path the cache step
-        # keys, so lockfile-stable reruns skip downloads and rebuild
-        # nothing.
+        # (the repo root and examples/bazel). Output bases go to /tmp
+        # so the cached paths carry only reusable state.
         run: |
           cat >~/.bazelrc <<EOF
-          common --repository_cache=$HOME/.cache/bazel/repo
-          build --disk_cache=$HOME/.cache/bazel/disk
+          startup --output_user_root=/tmp/bazel-out
+          common --repository_cache=$HOME/.cache/bazel-repo
+          build --disk_cache=$HOME/.cache/bazel-disk
           EOF
-      - name: Build plaid-lint
-        run: bazel build //cmd/plaid-lint
+      - name: Build BUILD graph (binary + every generated target)
+        # //... validates the whole gazelle-generated graph — including
+        # go_test compile targets — without running tests (the Go test
+        # suite runs under the toolchain in ci.yaml; the BUILD tree is
+        # build-supported, and running the fixture-heavy engine tests
+        # inside the bazel sandbox is not a supported configuration).
+        run: bazel build //...
       - name: Example e2e
         run: cd examples/bazel && ./e2e.sh
