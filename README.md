@@ -63,8 +63,13 @@ Override the cache backend with:
 | `PLAID_L0_CACHE_BACKEND` | Per-tier override for diagnostic and facts streams. |
 | `PLAID_L1_CACHE_BACKEND` | Per-tier override for per-analyzer package results. |
 | `PLAID_L2_CACHE_BACKEND` | Per-tier override for export data and package facts. |
+| `PLAID_L0_GOCACHEPROG` | Helper command for the L0 cache tier. |
+| `PLAID_L1_GOCACHEPROG` | Helper command for the L1 cache tier. |
+| `PLAID_L2_GOCACHEPROG` | Helper command for the L2 cache tier. |
 
 When the global backend is `gocacheprog`, L0 and L2 route through the helper while L1 stays local unless `PLAID_L1_CACHE_BACKEND=gocacheprog` is set explicitly.
+
+When a tier selects the `gocacheprog` backend, its `PLAID_<TIER>_GOCACHEPROG` helper command takes precedence over `GOCACHEPROG`; tiers without their own helper continue to use `GOCACHEPROG`. The helper variable does not select a backend by itself. For example, a separate L1 helper requires both `PLAID_L1_CACHE_BACKEND=gocacheprog` and `PLAID_L1_GOCACHEPROG=...`.
 
 Location resolution order is:
 
@@ -76,7 +81,7 @@ os.UserCacheDir()/plaid-lint
 $TMPDIR/plaid-lint-cache
 ```
 
-If any tier resolves to `gocacheprog`, `GOCACHEPROG` must point at a helper implementing the Go cache program protocol.
+If any tier resolves to `gocacheprog`, its `PLAID_<TIER>_GOCACHEPROG` or `GOCACHEPROG` value must point at a helper implementing the Go cache program protocol.
 
 ## Shared Cache Trust Model
 
