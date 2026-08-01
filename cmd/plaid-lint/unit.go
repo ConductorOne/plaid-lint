@@ -32,6 +32,7 @@ func (a *app) runUnit(args []string) int {
 	g := bindGlobalFlags(fs)
 	cfgPath := fs.String("cfg", "", "path to the unit.json action config (required)")
 	workerMode := fs.Bool("worker", false, "run as a Bazel persistent worker (JSON protocol on stdin/stdout)")
+	persistentWorker := fs.Bool("persistent_worker", false, "alias for --worker; Bazel appends this flag when it launches a persistent worker process")
 
 	args, aerr := expandArgsFiles(args)
 	if aerr != nil {
@@ -45,7 +46,7 @@ func (a *app) runUnit(args []string) int {
 		printUnitHelp(a.stdout)
 		return exitSuccess
 	}
-	if *workerMode {
+	if *workerMode || *persistentWorker {
 		return a.runUnitWorker()
 	}
 	if *cfgPath == "" {

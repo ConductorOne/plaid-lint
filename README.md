@@ -92,6 +92,67 @@ plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
   type-check, which surface as `typecheck` findings with an empty fact set.
 - All caching is the build system's concern: unit mode reads and writes no plaid-lint caches.
 
+## Bazel
+
+`@plaid_lint//bazel:defs.bzl` packages unit mode as a Bazel aspect plus a module-scoped
+rule, so `bazel build` lints every Go package as native, cacheable, remote-executable
+actions — the nogo model, with golangci-lint config compatibility.
+
+Setup:
+
+```python
+# MODULE.bazel
+bazel_dep(name = "plaid_lint", version = "0.0.0")
+# Until plaid_lint is published to the Bazel Central Registry, point
+# the dep at a checkout (or use archive_override / git_override):
+local_path_override(
+    module_name = "plaid_lint",
+    path = "third_party/plaid-lint",
+)
+```
+
+```python
+# tools/lint/linters.bzl — bind the aspect to your config once
+# (command-line aspects cannot take parameters).
+load("@plaid_lint//bazel:defs.bzl", "plaid_lint_aspect")
+
+plaid = plaid_lint_aspect(
+    config = Label("//:.golangci.yml"),
+    module_path = "example.com/yourmodule",
+)
+```
+
+```text
+# .bazelrc
+build:lint --aspects=//tools/lint:linters.bzl%plaid
+build:lint --output_groups=+plaid_report
+```
+
+Then `bazel build --config=lint //...` (and `bazel test --config=lint ...`) lints
+everything it builds. What you get:
+
+- **Per-package actions, cached like compiles.** Each Go package gets one `PlaidLint`
+  action: sources + direct deps' export data + direct deps' `.plaidfacts` in,
+  `.plaidfacts` + SARIF out. Content-keyed, incremental, remote-cacheable,
+  remote-executable; an unchanged package is never re-linted.
+- **Findings fail the build through Bazel validations.** `PlaidLint` records findings
+  as SARIF and never fails; a separate `ValidatePlaidLint` action (the `_validation`
+  output group) fails on them. `--norun_validations` flips to report-only while still
+  producing SARIF, and `--keep_going` aggregates findings across targets. `unused`
+  findings are excluded from per-target validation by default (see the doc in
+  `defs.bzl`); generated-only packages (e.g. rules_go's synthesized test main) and
+  external-repository deps contribute facts but are not lint subjects.
+- **Persistent worker mode.** `plaid_lint_aspect(use_worker = True)` runs `PlaidLint`
+  actions through Bazel's JSON persistent-worker protocol, amortizing process startup
+  and config parsing across actions. Output is byte-identical to one-shot execution.
+  Give each additionally-configured aspect variant a distinct `output_suffix` so their
+  declared outputs don't collide in one build.
+- **Module lint.** `go.mod`-scoped linters (`gomoddirectives`) run once per module via
+  the `plaid_module_lint` rule.
+
+See [examples/bazel](examples/bazel) for a complete consumer workspace — seeded
+findings, worker variant, module lint — exercised end to end by its `e2e.sh`.
+
 ## Cache Configuration
 
 By default, all cache tiers use the local filesystem under the platform cache directory with a `plaid-lint` suffix.

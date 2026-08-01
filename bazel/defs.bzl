@@ -59,7 +59,8 @@ def plaid_lint_aspect(
         facts_only = [],
         no_validation = False,
         validation_ignore_linters = ["unused"],
-        use_worker = False):
+        use_worker = False,
+        output_suffix = ""):
     """Returns a configured plaid_lint aspect.
 
     Call this in a .bzl file of your workspace (aspects applied from
@@ -85,6 +86,11 @@ def plaid_lint_aspect(
         see the module doc.
       use_worker: run PlaidLint actions via the Bazel persistent
         worker protocol (JSON). Serial workers; safe default off.
+      output_suffix: string inserted between the target name and the
+        output extensions (e.g. ".worker" makes app.worker.plaid.sarif).
+        Two differently-configured plaid aspects applied in one build
+        would otherwise declare colliding outputs; give each variant a
+        distinct suffix.
 
     Returns:
       An aspect to apply via --aspects or from a rule attribute.
@@ -97,4 +103,5 @@ def plaid_lint_aspect(
         no_validation = no_validation,
         validation_ignore_linters = validation_ignore_linters,
         use_worker = use_worker,
+        output_suffix = output_suffix,
     )

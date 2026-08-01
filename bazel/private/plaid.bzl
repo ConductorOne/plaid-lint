@@ -61,7 +61,7 @@ def _resource_set(_os_name, inputs_size):
         return {"memory": 2048, "cpu": 1}
     return {"memory": 512, "cpu": 1}
 
-def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker):
+def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker, output_suffix):
     if GoArchive not in target:
         return []
 
@@ -74,16 +74,20 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
     go = go_context(ctx, ctx.attr)
     binary = ctx.executable._plaid_lint
 
-    label_name = target.label.name
-    facts_out = ctx.actions.declare_file(label_name + ".plaidfacts")
-    sarif_out = ctx.actions.declare_file(label_name + ".plaid.sarif")
-    cfg_out = ctx.actions.declare_file(label_name + ".plaid-unit.json")
+    base_name = target.label.name + output_suffix
+    facts_out = ctx.actions.declare_file(base_name + ".plaidfacts")
+    sarif_out = ctx.actions.declare_file(base_name + ".plaid.sarif")
+    cfg_out = ctx.actions.declare_file(base_name + ".plaid-unit.json")
 
     # Scope: external-repo packages and configured prefix matches run
     # facts_only — their facts feed importers, but they are not lint
-    # subjects (nogo's includes/excludes semantics).
+    # subjects (nogo's includes/excludes semantics). Likewise archives
+    # made entirely of generated files (rules_go's synthesized
+    # testmain, protoc output): build machinery, not lint subjects.
     mode = "full"
     if _is_external(target) or _matches_prefix(data.importpath, facts_only):
+        mode = "facts_only"
+    if not any([s.is_source for s in srcs]):
         mode = "facts_only"
 
     # Direct dep artifacts. Deep gc export data covers transitive
@@ -108,7 +112,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
                 dep_facts[_pkg_key(darchive.data)] = info.facts.path
                 dep_inputs.append(info.facts)
 
-    importcfg_out = ctx.actions.declare_file(label_name + ".plaid-importcfg")
+    importcfg_out = ctx.actions.declare_file(base_name + ".plaid-importcfg")
     ctx.actions.write(importcfg_out, "\n".join(importcfg_lines) + "\n")
 
     # Standard-library types come from rules_go's compiled stdlib tree
@@ -194,7 +198,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
 
     # Validation: only full-mode (lint-subject) targets gate.
     if mode == "full" and not no_validation:
-        validation_out = ctx.actions.declare_file(label_name + ".plaid-validation")
+        validation_out = ctx.actions.declare_file(base_name + ".plaid-validation")
         vargs = ctx.actions.args()
         vargs.add("collect")
         vargs.add("--fail-on-findings")
@@ -232,7 +236,8 @@ def make_plaid_lint_aspect(
         facts_only = [],
         no_validation = False,
         validation_ignore_linters = ["unused"],
-        use_worker = False):
+        use_worker = False,
+        output_suffix = ""):
     """Constructs a plaid_lint aspect bound to a configuration.
 
     See //bazel:defs.bzl for argument documentation; this factory is
@@ -268,6 +273,7 @@ def make_plaid_lint_aspect(
             no_validation = no_validation,
             validation_ignore_linters = validation_ignore_linters,
             use_worker = use_worker,
+            output_suffix = output_suffix,
         )
 
     return aspect(

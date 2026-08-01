@@ -1,0 +1,39 @@
+name: bazel
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazelbuild/setup-bazelisk@v3
+      - name: Cache bazel
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'examples/bazel/MODULE.bazel.lock', '.bazelversion') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-
+      - name: Configure bazel caches
+        # A user-level bazelrc reaches both workspaces this job builds
+        # (the repo root and examples/bazel). The disk and repository
+        # caches live under the ~/.cache/bazel path the cache step
+        # keys, so lockfile-stable reruns skip downloads and rebuild
+        # nothing.
+        run: |
+          cat >~/.bazelrc <<EOF
+          common --repository_cache=$HOME/.cache/bazel/repo
+          build --disk_cache=$HOME/.cache/bazel/disk
+          EOF
+      - name: Build plaid-lint
+        run: bazel build //cmd/plaid-lint
+      - name: Example e2e
+        run: cd examples/bazel && ./e2e.sh
