@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "core",
+    srcs = [
+        "event.go",
+        "export.go",
+        "fast.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/event/core",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)

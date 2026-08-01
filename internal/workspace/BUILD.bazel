@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "workspace",
+    srcs = ["workspace.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/workspace",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/cache",
+        "//internal/gopls/file",
+        "//internal/gopls/protocol",
+        "//internal/gopls/settings",
+    ],
+)
+
+go_test(
+    name = "workspace_test",
+    srcs = ["workspace_test.go"],
+    deps = [
+        ":workspace",
+        "//internal/gopls/protocol",
+        "//internal/gopls/settings",
+    ],
+)

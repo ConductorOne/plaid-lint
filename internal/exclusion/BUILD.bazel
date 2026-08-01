@@ -1,0 +1,31 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "exclusion",
+    srcs = [
+        "exclusion.go",
+        "nolint.go",
+        "presets.go",
+        "streaming.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/exclusion",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "//internal/output",
+    ],
+)
+
+go_test(
+    name = "exclusion_test",
+    srcs = [
+        "exclusion_test.go",
+        "nolint_test.go",
+        "streaming_test.go",
+    ],
+    embed = [":exclusion"],
+    deps = [
+        "//internal/config",
+        "//internal/output",
+    ],
+)

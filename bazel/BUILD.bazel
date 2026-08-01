@@ -1,0 +1,2 @@
+# Public API surface of the plaid_lint Bazel module.
+exports_files(["defs.bzl"])

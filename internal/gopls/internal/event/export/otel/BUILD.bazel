@@ -1,0 +1,41 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "otel",
+    srcs = [
+        "common.go",
+        "metrics.go",
+        "options.go",
+        "otel.go",
+        "otlp.go",
+        "traces.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/event/export/otel",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/event/core",
+        "//internal/gopls/internal/event/export",
+        "//internal/gopls/internal/event/export/metric",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)
+
+go_test(
+    name = "otel_test",
+    srcs = [
+        "metrics_test.go",
+        "otel_test.go",
+        "traces_test.go",
+    ],
+    embed = [":otel"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/event/core",
+        "//internal/gopls/internal/event/export",
+        "//internal/gopls/internal/event/export/metric",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)

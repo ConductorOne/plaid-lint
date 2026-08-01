@@ -1,0 +1,68 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "plaid-lint_lib",
+    srcs = [
+        "cache.go",
+        "cache_other.go",
+        "cache_unix.go",
+        "collect.go",
+        "config.go",
+        "flags.go",
+        "help.go",
+        "linters.go",
+        "main.go",
+        "metrics_json.go",
+        "run.go",
+        "sink_other.go",
+        "sink_unix.go",
+        "unit.go",
+        "unit_worker.go",
+        "version.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/cmd/plaid-lint",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/cache",
+        "//internal/canonicalpath",
+        "//internal/config",
+        "//internal/engine",
+        "//internal/exclusion",
+        "//internal/l0",
+        "//internal/memlimit",
+        "//internal/output",
+        "//internal/quiet",
+        "//internal/registry",
+        "//internal/subproc",
+        "//internal/unit",
+    ],
+)
+
+go_binary(
+    name = "plaid-lint",
+    embed = [":plaid-lint_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "plaid-lint_test",
+    srcs = [
+        "cache_test.go",
+        "cli_test.go",
+        "flags_test.go",
+        "metrics_json_test.go",
+        "run_test.go",
+        "sink_test.go",
+        "trace_path_test.go",
+        "unit_cli_test.go",
+        "unit_parity_test.go",
+        "unit_worker_test.go",
+        "version_test.go",
+    ],
+    embed = [":plaid-lint_lib"],
+    deps = [
+        "//internal/config",
+        "//internal/unit",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

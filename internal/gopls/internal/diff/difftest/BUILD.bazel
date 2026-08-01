@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "difftest",
+    srcs = ["difftest.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/diff/difftest",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = ["//internal/gopls/internal/diff"],
+)
+
+go_test(
+    name = "difftest_test",
+    srcs = ["difftest_test.go"],
+    deps = [
+        ":difftest",
+        "//internal/gopls/internal/testenv",
+    ],
+)

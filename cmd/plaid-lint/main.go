@@ -109,6 +109,8 @@ func (a *app) run() int {
 		return a.runRun(rest)
 	case "unit":
 		return a.runUnit(rest)
+	case "collect":
+		return a.runCollect(rest)
 	case "linters":
 		return a.runLinters(rest)
 	case "version":

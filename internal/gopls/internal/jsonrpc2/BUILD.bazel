@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "jsonrpc2",
+    srcs = [
+        "conn.go",
+        "handler.go",
+        "jsonrpc2.go",
+        "labels.go",
+        "messages.go",
+        "serve.go",
+        "stream.go",
+        "wire.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/jsonrpc2",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)
+
+go_test(
+    name = "jsonrpc2_test",
+    srcs = [
+        "jsonrpc2_test.go",
+        "serve_test.go",
+        "wire_test.go",
+    ],
+    embed = [":jsonrpc2"],
+    deps = [
+        "//internal/gopls/internal/event/export/eventtest",
+        "//internal/gopls/internal/jsonrpc2/stack/stacktest",
+        "//internal/gopls/internal/testenv",
+    ],
+)

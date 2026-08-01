@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "subproc",
+    srcs = [
+        "cache.go",
+        "custom.go",
+        "diagnostic.go",
+        "doc.go",
+        "errors.go",
+        "helpers.go",
+        "invoke.go",
+        "pkgmain_shared.go",
+        "runner.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/subproc",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "//internal/output",
+    ],
+)
+
+go_test(
+    name = "subproc_test",
+    srcs = [
+        "custom_test.go",
+        "helpers_test.go",
+        "pkgmain_shared_test.go",
+        "runner_test.go",
+    ],
+    embed = [":subproc"],
+    deps = [
+        "//internal/config",
+        "//internal/output",
+    ],
+)

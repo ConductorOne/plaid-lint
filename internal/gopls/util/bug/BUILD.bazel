@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bug",
+    srcs = ["bug.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/util/bug",
+    visibility = ["//:__subpackages__"],
+    deps = ["@org_golang_x_telemetry//counter"],
+)
+
+go_test(
+    name = "bug_test",
+    srcs = ["bug_test.go"],
+    embed = [":bug"],
+    deps = ["@com_github_google_go_cmp//cmp"],
+)

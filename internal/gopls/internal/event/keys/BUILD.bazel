@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "keys",
+    srcs = [
+        "keys.go",
+        "standard.go",
+        "util.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/event/keys",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = ["//internal/gopls/internal/event/label"],
+)
+
+go_test(
+    name = "keys_test",
+    srcs = ["util_test.go"],
+    embed = [":keys"],
+)

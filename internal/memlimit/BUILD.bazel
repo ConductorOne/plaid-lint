@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "memlimit",
+    srcs = [
+        "cachebackend.go",
+        "memlimit.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/memlimit",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "memlimit_test",
+    srcs = [
+        "cachebackend_test.go",
+        "memlimit_test.go",
+    ],
+    embed = [":memlimit"],
+)

@@ -1,0 +1,47 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "analyzers",
+    srcs = [
+        "bundled.go",
+        "bundled_staticcheck.go",
+        "cache_version.go",
+        "configsalt.go",
+        "descriptor.go",
+        "process_version.go",
+        "registry.go",
+        "syntaxonly_register.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/analyzers",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@co_honnef_go_tools//staticcheck",
+        "@co_honnef_go_tools//staticcheck/sa1000",
+        "@com_github_gordonklaus_ineffassign//pkg/ineffassign",
+        "@com_github_kisielk_errcheck//errcheck",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/analysis/passes/assign",
+        "@org_golang_x_tools//go/analysis/passes/buildssa",
+        "@org_golang_x_tools//go/analysis/passes/ctrlflow",
+        "@org_golang_x_tools//go/analysis/passes/inspect",
+        "@org_golang_x_tools//go/analysis/passes/nilfunc",
+        "@org_golang_x_tools//go/analysis/passes/nilness",
+        "@org_golang_x_tools//go/analysis/passes/printf",
+        "@org_golang_x_tools//go/analysis/passes/unusedresult",
+    ],
+)
+
+go_test(
+    name = "analyzers_test",
+    srcs = [
+        "bundled_staticcheck_test.go",
+        "configsalt_test.go",
+        "registry_test.go",
+        "typeusescope_test.go",
+    ],
+    embed = [":analyzers"],
+    deps = [
+        "@co_honnef_go_tools//staticcheck",
+        "@org_golang_x_tools//go/analysis",
+    ],
+)

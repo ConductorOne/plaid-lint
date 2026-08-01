@@ -1,0 +1,41 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "typerefs",
+    srcs = [
+        "doc.go",
+        "packageset.go",
+        "refs.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/cache/typerefs",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/cache/metadata",
+        "//internal/gopls/cache/parsego",
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/util/frob",
+        "//internal/gopls/util/moremaps",
+    ],
+)
+
+go_test(
+    name = "typerefs_test",
+    srcs = [
+        "pkggraph_test.go",
+        "pkgrefs_test.go",
+        "refs_test.go",
+    ],
+    deps = [
+        ":typerefs",
+        "//internal/gopls/cache/metadata",
+        "//internal/gopls/cache/parsego",
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/internal/packagesinternal",
+        "//internal/gopls/internal/testenv",
+        "//internal/gopls/protocol",
+        "@com_github_google_go_cmp//cmp",
+        "@org_golang_x_sync//errgroup",
+        "@org_golang_x_tools//go/gcexportdata",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

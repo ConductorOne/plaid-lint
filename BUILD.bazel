@@ -1,0 +1,7 @@
+load("@gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix github.com/conductorone/plaid-lint
+# gazelle:exclude compare
+# gazelle:exclude bench
+# gazelle:exclude **/testdata
+gazelle(name = "gazelle")

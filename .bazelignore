@@ -1,0 +1,3 @@
+# examples/bazel is its own Bazel module (a consumer-shaped example
+# workspace); never load it as packages of this module.
+examples/bazel

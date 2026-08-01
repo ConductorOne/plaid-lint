@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "prometheus",
+    srcs = ["prometheus.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/event/export/prometheus",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/event/core",
+        "//internal/gopls/internal/event/export/metric",
+        "//internal/gopls/internal/event/label",
+    ],
+)

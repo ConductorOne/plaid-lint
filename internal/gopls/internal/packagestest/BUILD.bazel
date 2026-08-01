@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "packagestest",
+    srcs = [
+        "expect.go",
+        "export.go",
+        "gopath.go",
+        "modules.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/packagestest",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/internal/expect",
+        "//internal/gopls/internal/gocommand",
+        "//internal/gopls/internal/proxydir",
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_tools//go/packages",
+    ],
+)
+
+go_test(
+    name = "packagestest_test",
+    srcs = [
+        "expect_test.go",
+        "export_test.go",
+        "gopath_test.go",
+        "modules_test.go",
+    ],
+    deps = [
+        ":packagestest",
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/internal/expect",
+    ],
+)

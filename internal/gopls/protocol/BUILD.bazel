@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "protocol",
+    srcs = [
+        "doc.go",
+        "edits.go",
+        "enums.go",
+        "form.go",
+        "helpers.go",
+        "mapper.go",
+        "span.go",
+        "tsdocument_changes.go",
+        "tsinsertreplaceedit.go",
+        "tsprotocol.go",
+        "uri.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/protocol",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/diff",
+        "//internal/gopls/util/bug",
+        "//internal/gopls/util/pathutil",
+        "//internal/gopls/util/safetoken",
+    ],
+)

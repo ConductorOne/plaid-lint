@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "driverutil",
+    srcs = ["driverutil.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/driverutil",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/gopls/internal/analysis/driverutil"],
+)

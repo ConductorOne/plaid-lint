@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filecache",
+    srcs = ["filecache.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/filecache",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/util/bug",
+        "//internal/gopls/util/lru",
+    ],
+)
+
+go_test(
+    name = "filecache_test",
+    srcs = ["filecache_test.go"],
+    deps = [
+        ":filecache",
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_sync//errgroup",
+    ],
+)

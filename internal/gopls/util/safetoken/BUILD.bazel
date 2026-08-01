@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "safetoken",
+    srcs = ["safetoken.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/util/safetoken",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "safetoken_test",
+    srcs = ["safetoken_test.go"],
+    deps = [
+        ":safetoken",
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

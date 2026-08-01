@@ -13,6 +13,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"golang.org/x/tools/go/gcexportdata"
@@ -45,6 +46,12 @@ type exportDataImporter struct {
 	fset  *token.FileSet
 	paths map[string]string // importpath -> export data file
 
+	// stdlibDir optionally resolves import paths absent from paths:
+	// <stdlibDir>/<goos>_<goarch>/<importpath>.a — the layout of
+	// rules_go's compiled stdlib tree (and a classic GOPATH/pkg).
+	stdlibDir string
+	platform  string // "<goos>_<goarch>"
+
 	mu      sync.Mutex
 	imports map[string]*types.Package
 
@@ -70,6 +77,12 @@ func (imp *exportDataImporter) Import(path string) (*types.Package, error) {
 		return pkg, nil
 	}
 	file, ok := imp.paths[path]
+	if !ok && imp.stdlibDir != "" {
+		candidate := filepath.Join(imp.stdlibDir, imp.platform, filepath.FromSlash(path)+".a")
+		if _, err := os.Stat(candidate); err == nil {
+			file, ok = candidate, true
+		}
+	}
 	if !ok {
 		return nil, fmt.Errorf("package %q not named by importcfg", path)
 	}
@@ -138,9 +151,11 @@ func typecheck(cfg *Config) (*checkedPackage, error) {
 		}
 	}
 	imp := &exportDataImporter{
-		fset:    fset,
-		paths:   paths,
-		imports: make(map[string]*types.Package),
+		fset:      fset,
+		paths:     paths,
+		stdlibDir: cfg.Deps.StdlibDir,
+		platform:  cfg.Package.GOOS + "_" + cfg.Package.GOARCH,
+		imports:   make(map[string]*types.Package),
 	}
 	cp.imports = imp.imports
 

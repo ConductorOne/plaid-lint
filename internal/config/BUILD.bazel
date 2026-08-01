@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "config",
+    srcs = [
+        "base_rule.go",
+        "config.go",
+        "forbidigo.go",
+        "formatters.go",
+        "issues.go",
+        "legacy.go",
+        "linters.go",
+        "linters_settings.go",
+        "load.go",
+        "marshal.go",
+        "merge.go",
+        "output.go",
+        "run.go",
+        "severity.go",
+        "validate.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/config",
+    visibility = ["//:__subpackages__"],
+    deps = ["@in_gopkg_yaml_v3//:yaml_v3"],
+)
+
+go_test(
+    name = "config_test",
+    srcs = [
+        "corpus_test.go",
+        "load_test.go",
+        "merge_linters_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":config"],
+)

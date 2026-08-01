@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "driverutil",
+    srcs = [
+        "fix.go",
+        "print.go",
+        "readfile.go",
+        "url.go",
+        "validatefix.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/analysis/driverutil",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/astutil/free",
+        "//internal/gopls/internal/diff",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/ast/astutil",
+    ],
+)
+
+go_test(
+    name = "driverutil_test",
+    srcs = ["url_test.go"],
+    deps = [
+        ":driverutil",
+        "@org_golang_x_tools//go/analysis",
+    ],
+)

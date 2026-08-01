@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "testfuncs",
+    srcs = [
+        "match.go",
+        "tests.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/cache/testfuncs",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/cache/parsego",
+        "//internal/gopls/protocol",
+        "//internal/gopls/util/frob",
+        "//internal/gopls/util/safetoken",
+    ],
+)

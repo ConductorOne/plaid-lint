@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "proxydir",
+    srcs = ["proxydir.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/proxydir",
+    visibility = ["//internal/gopls:__subpackages__"],
+)
+
+go_test(
+    name = "proxydir_test",
+    srcs = ["proxydir_test.go"],
+    embed = [":proxydir"],
+)

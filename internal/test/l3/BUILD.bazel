@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "l3",
+    srcs = ["doc.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/test/l3",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "l3_test",
+    srcs = ["l3_streaming_test.go"],
+    embed = [":l3"],
+    deps = [
+        "//internal/analyzers",
+        "//internal/gopls/cache",
+        "//internal/scheduler",
+        "//internal/test/harness",
+    ],
+)

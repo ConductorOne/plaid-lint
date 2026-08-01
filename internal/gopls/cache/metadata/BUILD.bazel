@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "metadata",
+    srcs = [
+        "graph.go",
+        "metadata.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/cache/metadata",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/packagesinternal",
+        "//internal/gopls/protocol",
+        "//internal/gopls/util/bug",
+        "@org_golang_x_tools//go/packages",
+    ],
+)
+
+go_test(
+    name = "metadata_test",
+    srcs = ["cycle_test.go"],
+    embed = [":metadata"],
+    deps = ["//internal/gopls/util/bug"],
+)

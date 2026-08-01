@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "golden",
+    srcs = ["doc.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/test/golden",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "golden_test",
+    srcs = ["golden_test.go"],
+    embed = [":golden"],
+    deps = ["//internal/test/harness"],
+)

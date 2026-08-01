@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "settings",
+    srcs = ["settings.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/settings",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/protocol",
+        "@org_golang_x_tools//go/analysis",
+    ],
+)

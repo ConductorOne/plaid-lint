@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "harness",
+    srcs = ["harness.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/test/harness",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/analyzers",
+        "//internal/cache",
+        "//internal/gopls/cache",
+        "//internal/gopls/cache/metadata",
+        "//internal/gopls/settings",
+        "//internal/l3",
+        "//internal/test/cachetest",
+        "//internal/workspace",
+        "@org_golang_x_tools//go/analysis",
+    ],
+)

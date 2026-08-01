@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "app",
+    srcs = ["app.go"],
+    importpath = "example.com/plaidexample/app",
+    visibility = ["//visibility:public"],
+    deps = ["//lib"],
+)

@@ -13,3 +13,6 @@
 # Cached helper binary built by scripts/compare-against-monorepo.sh
 /cmd/strip-tracecheck-config/strip-tracecheck-config
 /vendor/
+
+# Bazel convenience symlinks (repo root and examples/bazel).
+bazel-*

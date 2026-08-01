@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tracecheck",
+    srcs = ["tracecheck.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/analyzers/tracecheck",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_iancoleman_strcase//:strcase",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/analysis/passes/inspect",
+        "@org_golang_x_tools//go/ast/inspector",
+    ],
+)
+
+go_test(
+    name = "tracecheck_test",
+    srcs = ["tracecheck_test.go"],
+    deps = [
+        ":tracecheck",
+        "@org_golang_x_tools//go/analysis/analysistest",
+    ],
+)

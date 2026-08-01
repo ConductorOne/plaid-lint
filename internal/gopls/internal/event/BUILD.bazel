@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "event",
+    srcs = [
+        "doc.go",
+        "event.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/event",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event/core",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)
+
+go_test(
+    name = "event_test",
+    srcs = ["bench_test.go"],
+    deps = [
+        ":event",
+        "//internal/gopls/internal/event/core",
+        "//internal/gopls/internal/event/export",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+    ],
+)

@@ -104,6 +104,14 @@ type DepsConfig struct {
 	// files. Missing entries mean "no facts" (stdlib, unlinted
 	// third-party) and are tolerated, like nogo.
 	Facts map[string]string `json:"facts,omitempty"`
+
+	// StdlibDir is an optional directory of compiled standard-library
+	// packages laid out as <StdlibDir>/<goos>_<goarch>/<importpath>.a
+	// (the shape rules_go's compiled stdlib tree and a classic
+	// GOPATH/pkg both use). Import paths not named by the importcfg
+	// are resolved here before failing. The directory is a declared
+	// input — reading it is within the hermeticity contract.
+	StdlibDir string `json:"stdlib_dir,omitempty"`
 }
 
 // ModuleConfig names module-level inputs.
@@ -190,6 +198,9 @@ func (c *Config) validate() error {
 	}
 	if c.Package.GOARCH == "" && mode != ModeModule {
 		return fmt.Errorf("package.goarch is required")
+	}
+	if c.Package.GOOS == "" && mode != ModeModule {
+		return fmt.Errorf("package.goos is required")
 	}
 	if c.Out.Sarif == "" {
 		return fmt.Errorf("out.sarif is required")
