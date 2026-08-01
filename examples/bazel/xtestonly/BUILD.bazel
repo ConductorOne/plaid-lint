@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "xtestonly",
+    srcs = ["xtestonly.go"],
+    importpath = "example.com/plaidexample/xtestonly",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "xtestonly_test",
+    visibility = ["//visibility:public"],
+    srcs = ["xtestonly_ext_test.go"],
+    deps = [":xtestonly"],
+)

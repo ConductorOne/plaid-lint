@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "collect.go",
         "config.go",
+        "constraints.go",
         "exec.go",
         "facts_io.go",
         "hermetic.go",
@@ -33,6 +34,7 @@ go_library(
 go_test(
     name = "unit_test",
     srcs = [
+        "constraints_test.go",
         "driver_test.go",
         "factaudit_test.go",
         "facts_determinism_test.go",

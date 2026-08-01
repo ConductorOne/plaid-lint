@@ -27,6 +27,11 @@ plaid_lint_suite_test(
         "//lib:lib_test",
         "//unusedpkg",
         "//unusedpkg:unusedpkg_test",
+        # No-embed, external-tests-only go_test (label-derived archive
+        # importpaths): pins testfilter-keyed classification and
+        # label-package facts_only matching through the suite.
+        "//xtestonly",
+        "//xtestonly:xtestonly_test",
     ],
 )
 

@@ -83,9 +83,19 @@ type PackageConfig struct {
 	GOARCH string `json:"goarch"`
 
 	// Tags are the build tags the sources were selected under.
-	// Informational for v1 (file selection already happened at
-	// the build layer).
+	// Together with GOOS/GOARCH they drive the driver's
+	// build-constraint file selection (see filterByConstraints),
+	// mirroring the compile action's -tags.
 	Tags []string `json:"tags,omitempty"`
+
+	// Cgo mirrors the compile action's CGO_ENABLED: it feeds
+	// build.Context.CgoEnabled during constraint selection, and when
+	// false, files importing "C" are excluded the way the compile
+	// builder excludes them. Cgo-enabled archives are not analyzable
+	// (the compiler consumes cgo-generated sources); with Cgo true the
+	// import-"C" files stay in and the package reports
+	// does-not-compile instead of silently analyzing a wrong subset.
+	Cgo bool `json:"cgo,omitempty"`
 
 	// GoVersion is the language version the package compiles under,
 	// e.g. "1.26". Sets types.Config.GoVersion when non-empty.
