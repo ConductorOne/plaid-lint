@@ -13,6 +13,14 @@
 #   4. plaid_module_lint fails on the seeded gomoddirectives finding
 #   5. worker mode (use_worker=True) produces byte-identical SARIF
 #   6. go_test with an in-package test builds and lints cleanly
+#   7. the aggregate suite gate (bazel test //:lint) fails with exactly
+#      the seeded enforced findings; superseded findings are absent
+#   8. a clean suite scope (bazel test //:lint_clean) passes
+#   9. the suite test result is cached on an immediate rerun
+#  10. the suite's aggregate SARIF is byte-identical across worker and
+#      one-shot execution
+#  11. bazel build of a suite target is report-only (a red gate never
+#      fails a plain build) and publishes the text report
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -152,5 +160,106 @@ run build --aspects=//tools/lint:linters.bzl%plaid_worker \
 [[ "$CODE" -eq 0 ]] || fail "(h) expected worker-configured aspect to succeed under --strategy=PlaidLint=sandboxed"
 [[ -f "$BAZEL_BIN/lib/lib.worker.plaid.sarif" ]] || fail "(h) expected fallback run to produce SARIF"
 pass "(h) use_worker actions fall back to one-shot execution under non-worker strategies"
+
+# (i) Aggregate suite gate: bazel test //:lint is red BY DESIGN and
+# must fail with exactly the seeded enforced findings — `unused`
+# survives only where no test-variant run supersedes it (neverUsed,
+# xHelper), plus the printf, errcheck, and gomoddirectives findings —
+# while superseded findings (lib.testOnly, unusedpkg.testedOnly) and
+# exported symbols never appear. The runner's verdict line pins the
+# exact enforced count so a new seeded finding (or a lost one) fails
+# this assertion, not just "some findings exist".
+run test //:lint
+[[ "$CODE" -ne 0 ]] || fail "(i) expected bazel test //:lint to fail on enforced findings"
+TESTLOG="bazel-testlogs/lint/test.log"
+[[ -f "$TESTLOG" ]] || fail "(i) expected test log at $TESTLOG"
+for want in \
+  "func neverUsed is unused" \
+  "func xHelper is unused" \
+  "gomoddirectives" \
+  "printf" \
+  "errcheck" \
+  "superseded by test-variant runs" \
+  "FAIL — 5 enforced finding(s)"; do
+  grep -qF "$want" "$TESTLOG" || fail "(i) expected '$want' in $TESTLOG"
+done
+for absent in "testedOnly" "testOnly is unused" "Exported"; do
+  if grep -qF "$absent" "$TESTLOG"; then
+    fail "(i) did not expect '$absent' in $TESTLOG"
+  fi
+done
+pass "(i) bazel test //:lint fails with exactly the 5 enforced findings; superseded findings absent"
+
+# (j) A clean suite scope passes: lib's only finding (unused
+# testOnly) is superseded by the in-package test archive, so
+# //:lint_clean must be green and say so.
+run test //:lint_clean
+[[ "$CODE" -eq 0 ]] || fail "(j) expected bazel test //:lint_clean to pass"
+CLEANLOG="bazel-testlogs/lint_clean/test.log"
+[[ -f "$CLEANLOG" ]] || fail "(j) expected test log at $CLEANLOG"
+grep -qF "plaid-lint suite: clean" "$CLEANLOG" || fail "(j) expected 'plaid-lint suite: clean' in $CLEANLOG"
+pass "(j) bazel test //:lint_clean passes and reports a clean suite"
+
+# (k) Suite caching: an immediate rerun of //:lint_clean must be a
+# test-result cache hit ("(cached) PASSED") and execute zero actions
+# — same process-summary reasoning as (c).
+run test //:lint_clean
+[[ "$CODE" -eq 0 ]] || fail "(k) expected cached rerun of //:lint_clean to pass"
+grep -qF "(cached) PASSED" <<<"$OUT" || fail "(k) expected '(cached) PASSED' in rerun output"
+SUMMARY="$(grep -E '^INFO: [0-9]+ process(es)?:' <<<"$OUT" || true)"
+[[ -n "$SUMMARY" ]] || fail "(k) no process summary line in bazel output"
+if grep -qE 'sandbox|worker|\blocal\b|standalone' <<<"$SUMMARY"; then
+  fail "(k) expected zero executed actions on cached test rerun; summary was: $SUMMARY"
+fi
+pass "(k) //:lint_clean rerun is a test-result cache hit ($SUMMARY)"
+
+# (l) Aggregate byte-identity across execution modes: the suite's
+# aggregate SARIF from a one-shot build must be byte-identical to the
+# worker-mode build's. The use_worker build setting changes the
+# output configuration (distinct bazel-out subtree), so the worker
+# SARIF path is resolved via cquery WITH the flag rather than the
+# BAZEL_BIN captured at the top of this script.
+run build //:lint
+[[ "$CODE" -eq 0 ]] || fail "(l) expected one-shot bazel build //:lint to succeed"
+ONE_SHOT_SARIF="$(mktemp)"
+cp "$BAZEL_BIN/lint.plaid.sarif" "$ONE_SHOT_SARIF"
+run build --@plaid_lint//bazel:use_worker=true //:lint
+[[ "$CODE" -eq 0 ]] || fail "(l) expected worker-mode bazel build //:lint to succeed"
+WORKER_SARIF="$("$BAZEL" cquery --output=files --@plaid_lint//bazel:use_worker=true //:lint 2>/dev/null | grep '\.plaid\.sarif$' | head -1)"
+[[ -n "$WORKER_SARIF" && -f "$WORKER_SARIF" ]] || fail "(l) could not resolve the worker-mode aggregate SARIF (got: ${WORKER_SARIF:-<empty>})"
+cmp -s "$ONE_SHOT_SARIF" "$WORKER_SARIF" \
+  || fail "(l) worker-mode aggregate SARIF differs from one-shot ($WORKER_SARIF)"
+rm -f "$ONE_SHOT_SARIF"
+pass "(l) suite aggregate SARIF is byte-identical across worker and one-shot execution"
+
+# (m) Build-not-test is report-only: a plain `bazel build` of the RED
+# suite target must succeed (the gate lives in the test runner, never
+# in the build) and publish the human-readable text report.
+run build //:lint
+[[ "$CODE" -eq 0 ]] || fail "(m) expected plain bazel build //:lint to succeed (report-only)"
+[[ -f "$BAZEL_BIN/lint.plaid-report.txt" ]] || fail "(m) expected aggregate text report at $BAZEL_BIN/lint.plaid-report.txt"
+pass "(m) bazel build //:lint is report-only and publishes lint.plaid-report.txt"
+
+# (n) Failure-class separation at the Bazel level: a malformed
+# .golangci config must fail the PlaidLint ACTIONS (a build error) —
+# never surface as lint findings or a red-but-built test.
+run test //:lint_clean --@plaid_lint//bazel:config=//:bad-config.yml
+[[ "$CODE" -ne 0 ]] || fail "(n) expected a build failure under a malformed config"
+grep -q "FAILED TO BUILD" <<<"$OUT" || fail "(n) expected FAILED TO BUILD (action failure), got a test verdict instead"
+if grep -qE "enforced finding|plaid-lint suite: FAIL" <<<"$OUT"; then
+  fail "(n) config failure was reported as lint findings"
+fi
+pass "(n) a malformed config fails the build, never masquerading as findings"
+
+# (o) Requirement-9 flags: --keep_going must not change the suite
+# verdict, and --norun_validations must NOT disable the suite gate
+# (it only silences per-target validation actions; the suite is an
+# explicitly requested test).
+run test //:lint --keep_going
+[[ "$CODE" -ne 0 ]] || fail "(o) expected the red suite to stay red under --keep_going"
+grep -q "FAIL — 5 enforced finding(s)" <<<"$OUT" || grep -q "FAILED" <<<"$OUT" || fail "(o) missing failure under --keep_going"
+run test //:lint --norun_validations
+[[ "$CODE" -ne 0 ]] || fail "(o) --norun_validations must not disable the suite gate"
+pass "(o) suite verdict stable under --keep_going and --norun_validations"
 
 echo "OK: all e2e assertions passed"

@@ -8,6 +8,35 @@ plaid_module_lint(
 )
 
 exports_files(
-    [".golangci.yml", "go.mod"],
+    [".golangci.yml", "bad-config.yml", "go.mod"],
     visibility = ["//visibility:public"],
+)
+
+load("@plaid_lint//bazel:defs.bzl", "plaid_lint_suite_test")
+
+# The aggregate lint gate over the whole example (deliberately RED:
+# it must surface exactly the seeded findings — see e2e.sh).
+plaid_lint_suite_test(
+    name = "lint",
+    go_mod = ":go.mod",
+    module_path = "example.com/plaidexample",
+    tags = ["manual"],  # red by design; run explicitly from e2e
+    targets = [
+        "//app",
+        "//lib",
+        "//lib:lib_test",
+        "//unusedpkg",
+        "//unusedpkg:unusedpkg_test",
+    ],
+)
+
+# A clean scope: lib's only finding (unused testOnly) is superseded by
+# the in-package test archive, so this suite passes.
+plaid_lint_suite_test(
+    name = "lint_clean",
+    tags = ["manual"],
+    targets = [
+        "//lib",
+        "//lib:lib_test",
+    ],
 )

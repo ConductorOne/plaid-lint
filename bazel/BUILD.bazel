@@ -1,2 +1,46 @@
 # Public API surface of the plaid_lint Bazel module.
+#
+# The suite path (plaid_lint_suite_test + plaid_lint_suite_aspect) is
+# configured through the build settings below rather than a factory:
+# aspects carried on rule attributes must be top-level values of their
+# defining .bzl file, so per-workspace configuration travels as flags.
+# Set them once in the consumer's .bazelrc:
+#
+#   common --@plaid_lint//bazel:config=//:.golangci.yml
+#   common --@plaid_lint//bazel:module_path=example.com/mod
+#
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag", "string_list_flag")
+
+package(default_visibility = ["//visibility:public"])
+
 exports_files(["defs.bzl"])
+
+# The workspace's .golangci.{yml,yaml,json}. The default sentinel
+# means "plaid-lint's built-in defaults".
+label_flag(
+    name = "config",
+    build_setting_default = ":no_config",
+)
+
+filegroup(
+    name = "no_config",
+    srcs = [],
+)
+
+string_flag(
+    name = "module_path",
+    build_setting_default = "",
+)
+
+# Importpath prefixes analyzed for facts only (dependencies of the
+# lint scope, e.g. generated code). External repos are always
+# facts-only.
+string_list_flag(
+    name = "facts_only",
+    build_setting_default = [],
+)
+
+bool_flag(
+    name = "use_worker",
+    build_setting_default = False,
+)

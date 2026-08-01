@@ -32,6 +32,7 @@ type collectRun struct {
 	pkg        string
 	mode       string
 	goFiles    []string
+	compiles   bool
 	diags      []output.Diagnostic
 }
 
@@ -61,18 +62,32 @@ func Collect(paths []string) (*CollectResult, error) {
 	res := &CollectResult{}
 
 	// Supersession: run indexes whose unused findings are dropped.
+	// Bucketed by package first — only same-package runs can
+	// supersede each other, and an aggregate over a monorepo-scale
+	// target set (thousands of runs) must not do a quadratic scan
+	// across unrelated packages.
 	superseded := make([]bool, len(runs))
+	byPkg := map[string][]int{}
 	for i := range runs {
-		if runs[i].pkg == "" || len(runs[i].goFiles) == 0 {
-			continue
+		if runs[i].pkg != "" && len(runs[i].goFiles) > 0 {
+			byPkg[runs[i].pkg] = append(byPkg[runs[i].pkg], i)
 		}
-		for j := range runs {
-			if i == j || runs[j].pkg != runs[i].pkg {
-				continue
-			}
-			if strictSuperset(runs[j].goFiles, runs[i].goFiles) {
-				superseded[i] = true
-				break
+	}
+	for _, bucket := range byPkg {
+		for _, i := range bucket {
+			for _, j := range bucket {
+				if i == j {
+					continue
+				}
+				// A run that failed to compile analyzed nothing; it
+				// must never invalidate a sibling run's findings.
+				if !runs[j].compiles {
+					continue
+				}
+				if strictSuperset(runs[j].goFiles, runs[i].goFiles) {
+					superseded[i] = true
+					break
+				}
 			}
 		}
 	}
@@ -140,9 +155,10 @@ type sarifDoc struct {
 		} `json:"results"`
 		Properties struct {
 			PlaidUnit struct {
-				Package string   `json:"package"`
-				Mode    string   `json:"mode"`
-				GoFiles []string `json:"goFiles"`
+				Package  string   `json:"package"`
+				Mode     string   `json:"mode"`
+				GoFiles  []string `json:"goFiles"`
+				Compiles *bool    `json:"compiles"`
 			} `json:"plaidUnit"`
 		} `json:"properties"`
 	} `json:"runs"`
@@ -165,6 +181,9 @@ func readSarifRun(path string) (collectRun, error) {
 			run.mode = r.Properties.PlaidUnit.Mode
 			run.goFiles = append([]string(nil), r.Properties.PlaidUnit.GoFiles...)
 			sort.Strings(run.goFiles)
+			// Absent (pre-compiles producers) defaults to true; the
+			// current driver always writes it.
+			run.compiles = r.Properties.PlaidUnit.Compiles == nil || *r.Properties.PlaidUnit.Compiles
 		}
 		for _, res := range r.Results {
 			d := output.Diagnostic{
@@ -184,4 +203,22 @@ func readSarifRun(path string) (collectRun, error) {
 		}
 	}
 	return run, nil
+}
+
+// RenderAggregateSarif serializes a merged diagnostic stream as one
+// SARIF run. The aggregate carries no plaidUnit property bag — it is
+// the terminal artifact, not an input to further supersession.
+func RenderAggregateSarif(diags []output.Diagnostic) ([]byte, error) {
+	var b aggregateBuffer
+	if err := output.NewSarif(&b).Print(diags); err != nil {
+		return nil, err
+	}
+	return b.bytes, nil
+}
+
+type aggregateBuffer struct{ bytes []byte }
+
+func (b *aggregateBuffer) Write(p []byte) (int, error) {
+	b.bytes = append(b.bytes, p...)
+	return len(p), nil
 }

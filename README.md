@@ -155,6 +155,59 @@ everything it builds. What you get:
 - **Module lint.** `go.mod`-scoped linters (`gomoddirectives`) run once per module via
   the `plaid_module_lint` rule.
 
+### Aggregate enforcement (`plaid_lint_suite_test`)
+
+Per-target validation cannot enforce `unused`: whether a library symbol is dead
+depends on the test archives that also analyze it, which live in *other* targets.
+`plaid_lint_suite_test` closes that gap — it is a test rule that runs the plaid
+aspect over `targets` (and their transitive Go deps/embeds), aggregates every
+SARIF report with `plaid-lint collect`, applies the test-variant supersede rule,
+and fails on what survives.
+
+The suite aspect rides a rule attribute, so it cannot take parameters the way a
+`--aspects` factory aspect does; it is configured through build settings instead:
+
+```text
+# .bazelrc — suite configuration (build settings are global per invocation)
+common --@plaid_lint//bazel:config=//:.golangci.yml
+common --@plaid_lint//bazel:module_path=example.com/yourmodule
+# optional: --@plaid_lint//bazel:facts_only=<pkg,...>  --@plaid_lint//bazel:use_worker=true
+```
+
+```python
+# BUILD.bazel
+load("@plaid_lint//bazel:defs.bzl", "plaid_lint_suite_test")
+
+plaid_lint_suite_test(
+    name = "lint",
+    go_mod = ":go.mod",                      # optional: adds module-scoped linters
+    module_path = "example.com/yourmodule",  # required with go_mod
+    targets = [
+        "//app",
+        "//lib",
+        "//lib:lib_test",  # include test targets: their archives supersede
+    ],
+)
+```
+
+Semantics:
+
+- **`unused` is enforced — after supersession.** A test target's internal archive
+  analyzes a strict superset of its library's files, so the library run's `unused`
+  findings about test-only symbols are dropped at collect time and everything that
+  survives fails the test. Exported symbols are treated as used (`unused`'s
+  exported-is-used mode), so the suite never flags a package's public API.
+- **Failure classes stay distinct.** Findings fail the *test* (the runner prints
+  the report and gates on the verdict's enforced count); an unreadable or
+  malformed SARIF report fails the *PlaidCollect* action; a bad lint config fails
+  the *PlaidLint* actions themselves. A red gate is never confusable with broken
+  infrastructure.
+- **`bazel build` is report-only.** Building the suite target runs the lint and
+  collect actions and publishes `<name>.plaid.sarif` + `<name>.plaid-report.txt`
+  to bazel-bin, but only `bazel test` enforces the verdict — a red gate never
+  breaks a plain build.
+- **`ignore_linters`** prints but never fails on the named linters' findings.
+
 See [examples/bazel](examples/bazel) for a complete consumer workspace — seeded
 findings, worker variant, module lint — exercised end to end by its `e2e.sh`.
 

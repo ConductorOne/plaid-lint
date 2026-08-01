@@ -19,6 +19,8 @@ is the only thing that fails, via the official validations mechanism
 (`--run_validations`, default on; `--norun_validations` to disable).
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_go//go:def.bzl", "GoArchive", "go_context")
 
 GO_TOOLCHAIN = "@rules_go//go:toolchain"
@@ -31,6 +33,28 @@ PlaidFactsInfo = provider(
                   "EMBEDDING target's archive may list as direct deps " +
                   "(this target's direct deps, plus embedded targets' " +
                   "maps), keyed by compiler package path.",
+    },
+)
+
+PlaidReportInfo = provider(
+    doc = "One archive's lint report, as an element of PlaidLintInfo.reports.",
+    fields = {
+        "sarif": "File: the archive's SARIF report.",
+        "package": "string: the compiler package path the report covers.",
+        "mode": "string: 'full' or 'facts_only'.",
+        "label": "Label: the target that produced the report.",
+    },
+)
+
+PlaidLintInfo = provider(
+    doc = """Aggregatable lint reports. Carried by every target the
+plaid aspect visited: the target's own archives' reports plus the
+transitive reports of its deps and embeds. An aggregation rule
+(plaid_lint_suite_test) consumes this instead of walking bazel-bin —
+typed inputs with package identity, which the collector's
+test-variant supersede rule needs.""",
+    fields = {
+        "reports": "depset[PlaidReportInfo]: transitive lint reports.",
     },
 )
 
@@ -139,10 +163,37 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
             if res:
                 lints.append(res)
 
+    transitive_reports = []
+    for attr_name in _DEP_ATTRS:
+        for dep in getattr(ctx.rule.attr, attr_name, []):
+            if PlaidLintInfo in dep:
+                transitive_reports.append(dep[PlaidLintInfo].reports)
+
     if not lints:
+        # Nothing of this target's own to lint (no compiled Go srcs);
+        # still forward deps' reports so an aggregation rule sees
+        # through wrapper targets.
+        if transitive_reports:
+            return [PlaidLintInfo(reports = depset(transitive = transitive_reports))]
         return []
 
-    providers = [PlaidFactsInfo(facts = main.facts if main else lints[0].facts, by_key = by_key)]
+    reports = depset(
+        direct = [
+            PlaidReportInfo(
+                sarif = l.sarif,
+                package = l.package,
+                mode = l.mode,
+                label = target.label,
+            )
+            for l in lints
+        ],
+        transitive = transitive_reports,
+    )
+
+    providers = [
+        PlaidFactsInfo(facts = main.facts if main else lints[0].facts, by_key = by_key),
+        PlaidLintInfo(reports = reports),
+    ]
     output_groups = {
         "plaid_report": depset([l.sarif for l in lints]),
         "plaid_facts": depset([l.facts for l in lints]),
@@ -156,7 +207,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
         vargs = ctx.actions.args()
         vargs.add("collect")
         vargs.add("--fail-on-findings")
-        vargs.add("--out", validation_out.path)
+        vargs.add("--out", validation_out)
         for l in validation_ignore_linters:
             vargs.add("--ignore-linter", l)
         vargs.add_all(gating)
@@ -243,6 +294,14 @@ def _lint_archive(env, target, archive, base_name, by_key):
             "sarif": sarif_out.path,
         },
     }
+
+    # go_test archives declare every test source and rely on the
+    # compiler's -testfilter to split the internal (package foo) and
+    # external (package foo_test) sides; the unit driver mirrors that
+    # filter from the same GoInfo field.
+    test_filter = getattr(archive.source, "testfilter", None)
+    if test_filter in ("only", "exclude"):
+        unit_cfg["package"]["test_filter"] = test_filter
     if env.config:
         unit_cfg["analysis"]["config"] = env.config.files.to_list()[0].path
     if env.module_path:
@@ -292,7 +351,7 @@ def _lint_archive(env, target, archive, base_name, by_key):
         toolchain = GO_TOOLCHAIN,
     )
 
-    return struct(facts = facts_out, sarif = sarif_out, mode = mode)
+    return struct(facts = facts_out, sarif = sarif_out, mode = mode, package = _pkg_key(data))
 
 def _major_minor(version):
     """'1.26.5' -> '1.26' (types.Config.GoVersion wants a language
@@ -360,42 +419,22 @@ def make_plaid_lint_aspect(
 
 def _plaid_module_lint_impl(ctx):
     binary = ctx.executable._plaid_lint
-    sarif_out = ctx.actions.declare_file(ctx.label.name + ".plaid.sarif")
-    cfg_out = ctx.actions.declare_file(ctx.label.name + ".plaid-unit.json")
-    go_mod = ctx.file.go_mod
-
-    unit_cfg = {
-        "schema": 1,
-        "package": {},
-        "module": {"go_mod": go_mod.path, "path": ctx.attr.module_path},
-        "analysis": {"mode": "module"},
-        "out": {"sarif": sarif_out.path},
-    }
-    config_files = []
-    if ctx.attr.config:
-        config_files = ctx.files.config
-        unit_cfg["analysis"]["config"] = config_files[0].path
-    ctx.actions.write(cfg_out, json.encode(unit_cfg))
-
-    args = ctx.actions.args()
-    args.add("unit")
-    args.add("--cfg", cfg_out.path)
-    ctx.actions.run(
-        mnemonic = "PlaidModuleLint",
-        progress_message = "Linting go.mod (plaid-lint)",
-        executable = binary,
-        arguments = [args],
-        inputs = [cfg_out, go_mod] + config_files,
-        outputs = [sarif_out],
-        execution_requirements = {},
+    config_files = ctx.files.config if ctx.attr.config else []
+    sarif_out = _emit_module_lint(
+        ctx,
+        binary,
+        ctx.file.go_mod,
+        config_files,
+        ctx.attr.module_path,
+        ctx.label.name,
     )
 
     validation_out = ctx.actions.declare_file(ctx.label.name + ".plaid-validation")
     vargs = ctx.actions.args()
     vargs.add("collect")
     vargs.add("--fail-on-findings")
-    vargs.add("--out", validation_out.path)
-    vargs.add(sarif_out.path)
+    vargs.add("--out", validation_out)
+    vargs.add(sarif_out)
     ctx.actions.run(
         mnemonic = "ValidatePlaidLint",
         progress_message = "Validating go.mod lint results",
@@ -440,4 +479,269 @@ unit-mode hermeticity contract).""",
             cfg = "exec",
         ),
     },
+)
+
+def _emit_module_lint(ctx, binary, go_mod, config_files, module_path, base_name):
+    """Emits the module-mode PlaidLint action (go.mod-scoped linters,
+    e.g. gomoddirectives) and returns its SARIF output. Shared by
+    plaid_module_lint and the suite rule so module coverage cannot
+    drift between the two. base_name is the full output base: the
+    standalone rule passes its label name (the shipped rc.8 artifact
+    name), the suite appends ".module" to avoid colliding with its
+    aggregate output."""
+    sarif_out = ctx.actions.declare_file(base_name + ".plaid.sarif")
+    cfg_out = ctx.actions.declare_file(base_name + ".plaid-unit.json")
+    unit_cfg = {
+        "schema": 1,
+        "package": {},
+        "module": {"go_mod": go_mod.path, "path": module_path},
+        "analysis": {"mode": "module"},
+        "out": {"sarif": sarif_out.path},
+    }
+    if config_files:
+        unit_cfg["analysis"]["config"] = config_files[0].path
+    ctx.actions.write(cfg_out, json.encode(unit_cfg))
+    args = ctx.actions.args()
+    args.add("unit")
+    args.add("--cfg", cfg_out.path)
+    ctx.actions.run(
+        mnemonic = "PlaidModuleLint",
+        progress_message = "Linting go.mod (plaid-lint)",
+        executable = binary,
+        arguments = [args],
+        inputs = [cfg_out, go_mod] + config_files,
+        outputs = [sarif_out],
+        execution_requirements = {},
+    )
+    return sarif_out
+
+def _suite_test_impl(ctx):
+    binary = ctx.executable._plaid_lint
+
+    # Every explicitly listed target must contribute reports: a
+    # filegroup, wrapper rule, or non-Go target silently narrowing
+    # the enforced scope is exactly the failure mode an aggregate
+    # gate exists to prevent, so it is a configuration error here.
+    unlintable = [
+        str(t.label)
+        for t in ctx.attr.targets
+        if PlaidLintInfo not in t
+    ]
+    if unlintable:
+        fail("plaid_lint_suite_test %s: targets not visited by the plaid aspect (not Go targets providing GoArchive): %s" %
+             (ctx.label, ", ".join(unlintable)))
+
+    reports = depset(transitive = [
+        t[PlaidLintInfo].reports
+        for t in ctx.attr.targets
+    ]).to_list()
+
+    # Only full-mode reports gate: facts_only archives (external
+    # repos, generated code, configured prefixes) are dependencies of
+    # the lint scope, not subjects.
+    sarifs = [r.sarif for r in reports if r.mode == "full"]
+
+    config_files = _setting_config_files(ctx.attr._plaid_config)
+    if ctx.file.go_mod:
+        sarifs.append(_emit_module_lint(
+            ctx,
+            binary,
+            ctx.file.go_mod,
+            config_files,
+            ctx.attr.module_path,
+            ctx.label.name + ".module",
+        ))
+
+    if not sarifs:
+        fail("plaid_lint_suite_test %s: no lint reports reachable from targets %s — are they Go targets visited by the plaid aspect?" %
+             (ctx.label, ctx.attr.targets))
+
+    aggregate_sarif = ctx.actions.declare_file(ctx.label.name + ".plaid.sarif")
+    report_txt = ctx.actions.declare_file(ctx.label.name + ".plaid-report.txt")
+    verdict = ctx.actions.declare_file(ctx.label.name + ".plaid-verdict")
+
+    # The collector always succeeds when its INPUTS are usable and
+    # writes the verdict; findings live in the verdict, which the test
+    # runner enforces. An unreadable/malformed SARIF fails this action
+    # — a build error, cleanly distinct from a red test (findings).
+    cargs = ctx.actions.args()
+    cargs.add("collect")
+    cargs.add("--out-sarif", aggregate_sarif)
+    cargs.add("--out-text", report_txt)
+    cargs.add("--verdict", verdict)
+    for l in ctx.attr.ignore_linters:
+        cargs.add("--ignore-linter", l)
+
+    # The report list can reach monorepo scale (thousands of files);
+    # it travels in a params file (plaid-lint expands @file), while
+    # the subcommand and flags stay on the argv proper.
+    file_args = ctx.actions.args()
+    file_args.add_all(sarifs)
+    file_args.use_param_file("@%s", use_always = True)
+    file_args.set_param_file_format("multiline")
+    ctx.actions.run(
+        mnemonic = "PlaidCollect",
+        progress_message = "Aggregating %d plaid-lint reports for %%{label}" % len(sarifs),
+        executable = binary,
+        arguments = [cargs, file_args],
+        inputs = sarifs,
+        outputs = [aggregate_sarif, report_txt, verdict],
+        execution_requirements = {"supports-path-mapping": "1"},
+    )
+
+    # The test runner prints the report and gates on the verdict's
+    # enforced count. Runfiles resolve via $TEST_SRCDIR (bazel test)
+    # with a $0.runfiles fallback (bazel run).
+    runner = ctx.actions.declare_file(ctx.label.name + ".plaid-runner.sh")
+    ctx.actions.write(
+        runner,
+        """#!/usr/bin/env bash
+set -euo pipefail
+RUNFILES="${{TEST_SRCDIR:-$0.runfiles}}/{workspace}"
+REPORT="$RUNFILES/{report}"
+VERDICT="$RUNFILES/{verdict}"
+cat "$REPORT"
+enforced="$(sed -n 's/^enforced=//p' "$VERDICT")"
+superseded="$(sed -n 's/^superseded=//p' "$VERDICT")"
+if [[ "${{superseded:-0}}" -gt 0 ]]; then
+  echo "plaid-lint suite: $superseded unused finding(s) superseded by test-variant runs" >&2
+fi
+if [[ "${{enforced:-0}}" -gt 0 ]]; then
+  echo "plaid-lint suite: FAIL — $enforced enforced finding(s)" >&2
+  exit 1
+fi
+echo "plaid-lint suite: clean"
+""".format(
+            workspace = ctx.workspace_name,
+            report = report_txt.short_path,
+            verdict = verdict.short_path,
+        ),
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([aggregate_sarif, report_txt]),
+            runfiles = ctx.runfiles(files = [report_txt, verdict]),
+        ),
+        OutputGroupInfo(
+            plaid_report = depset([aggregate_sarif]),
+        ),
+    ]
+
+def _setting_config_files(config_target):
+    """Resolves the //bazel:config label_flag to the .golangci config
+    file list. The default flag value points at the empty
+    //bazel:no_config sentinel, which means 'plaid-lint defaults'."""
+    if config_target == None:
+        return []
+    return config_target.files.to_list()
+
+def _flag_string(t):
+    return t[BuildSettingInfo].value
+
+def _flag_string_list(t):
+    return t[BuildSettingInfo].value
+
+def _flag_bool(t):
+    return t[BuildSettingInfo].value
+
+# The build settings the suite path is configured through. Aspects
+# carried on rule attributes must be top-level values of their
+# defining .bzl file — a factory-parameterized aspect cannot ride a
+# rule attribute — so configuration travels through build settings
+# instead (the same model rules_go uses for nogo selection). Set them
+# once in .bazelrc:
+#
+#   common --@plaid_lint//bazel:config=//:.golangci.yml
+#   common --@plaid_lint//bazel:module_path=example.com/mod
+#
+_SUITE_SETTING_ATTRS = {
+    "_plaid_config": attr.label(
+        default = Label("//bazel:config"),
+        allow_files = True,
+    ),
+    "_plaid_module_path": attr.label(
+        default = Label("//bazel:module_path"),
+    ),
+    "_plaid_facts_only": attr.label(
+        default = Label("//bazel:facts_only"),
+    ),
+    "_plaid_use_worker": attr.label(
+        default = Label("//bazel:use_worker"),
+    ),
+    "_plaid_lint": attr.label(
+        default = Label("//cmd/plaid-lint"),
+        executable = True,
+        cfg = "exec",
+    ),
+    "_go_context_data": attr.label(
+        default = Label("@rules_go//:go_context_data"),
+    ),
+}
+
+def _suite_aspect_impl(target, ctx):
+    config_files = _setting_config_files(ctx.attr._plaid_config)
+    return _plaid_lint_aspect_impl(
+        target,
+        ctx,
+        config = ctx.attr._plaid_config if config_files else None,
+        module_path = _flag_string(ctx.attr._plaid_module_path),
+        facts_only = _flag_string_list(ctx.attr._plaid_facts_only),
+        no_validation = True,
+        validation_ignore_linters = [],
+        use_worker = _flag_bool(ctx.attr._plaid_use_worker),
+        output_suffix = ".suite",
+    )
+
+plaid_lint_suite_aspect = aspect(
+    implementation = _suite_aspect_impl,
+    attr_aspects = _DEP_ATTRS,
+    attrs = _SUITE_SETTING_ATTRS,
+    required_providers = [GoArchive],
+    toolchains = [GO_TOOLCHAIN],
+    doc = """The build-settings-configured plaid aspect the suite rule
+carries on its `targets` attribute. Report-only per target (the suite
+is the gate); configured via the @plaid_lint//bazel:{config,
+module_path,facts_only,use_worker} settings. Its outputs use the
+".suite" name suffix so it composes with factory aspects applied via
+--aspects in the same build.""",
+)
+
+plaid_lint_suite_test = rule(
+    implementation = _suite_test_impl,
+    test = True,
+    attrs = dicts.add(_SUITE_SETTING_ATTRS, {
+        "targets": attr.label_list(
+            aspects = [plaid_lint_suite_aspect],
+            doc = "Go targets to lint; the aspect visits their " +
+                  "transitive deps/embeds, so top-level targets " +
+                  "(binaries, tests) suffice.",
+        ),
+        "go_mod": attr.label(
+            allow_single_file = True,
+            doc = "The module's go.mod; when set, module-scoped " +
+                  "linters (gomoddirectives) are included in the " +
+                  "aggregate. Omit only for module-less scopes.",
+        ),
+        "module_path": attr.string(
+            doc = "The Go module path, for module-scoped linters.",
+        ),
+        "ignore_linters": attr.string_list(
+            doc = "Linters whose findings the suite prints but never " +
+                  "fails on. Default empty — the suite exists " +
+                  "precisely to enforce `unused` after the " +
+                  "test-variant supersede rule.",
+        ),
+    }),
+    doc = """Aggregate lint gate. Collects every SARIF report the
+plaid_lint_suite_aspect produced over `targets` (through the typed
+PlaidLintInfo provider — never by walking bazel-bin), applies the
+test-variant unused supersede rule, and fails the TEST on surviving
+findings. Findings, analyzer/infrastructure failures, and config
+errors stay distinct: findings fail this test; an unreadable report
+fails the PlaidCollect action; a bad .golangci config fails the
+PlaidLint actions. `bazel build` on this target produces the
+aggregate SARIF and text report without enforcing.""",
 )

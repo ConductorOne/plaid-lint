@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "forbidden",
+    srcs = ["forbidden.go"],
+    importpath = "example.com/plaidexample/c1parity/internal/forbidden",
+    visibility = ["//c1parity:__subpackages__"],
+)
