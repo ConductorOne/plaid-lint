@@ -107,6 +107,8 @@ func (a *app) run() int {
 	switch first {
 	case "run":
 		return a.runRun(rest)
+	case "unit":
+		return a.runUnit(rest)
 	case "linters":
 		return a.runLinters(rest)
 	case "version":
@@ -136,9 +138,11 @@ func (a *app) printTopHelp() {
 Usage:
   plaid-lint [command] [flags]
   plaid-lint run [flags]                lint the code (default subcommand)
+  plaid-lint unit --cfg unit.json       analyze one package from declared inputs
 
 Available Commands:
   run         Lint the code.
+  unit        Analyze exactly one package from declared inputs (build-system action mode).
   linters     List current linters configuration.
   version     Display the plaid-lint version.
   cache       Cache control and information.

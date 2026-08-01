@@ -49,6 +49,49 @@ plaid-lint cache clean
 
 Output format selection uses `--out-format` and supports `text`, `json`, `sarif`, `checkstyle`, `codeclimate`, `junit-xml`, `tab`, `html`, and `teamcity`.
 
+## Unit Mode (build-system actions)
+
+`plaid-lint unit` analyzes exactly one package from declared inputs — no `go list`, no module
+resolution, no Go toolchain, no network. It is the execution mode a build system (Bazel, a REAPI
+executor) invokes per package: dependency types come from compiler export data named by an
+importcfg, cross-package analysis facts flow through `.plaidfacts` files along dependency edges,
+and diagnostics are written as SARIF 2.1.0 (including suggested-fix edits).
+
+```sh
+plaid-lint unit --cfg unit.json
+plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
+```
+
+`unit.json` (schema 1):
+
+```json
+{
+  "schema": 1,
+  "package": {
+    "path": "example.com/mod/pkg/foo",
+    "go_files": ["pkg/foo/a.go"],
+    "goos": "linux", "goarch": "arm64", "go_version": "1.26"
+  },
+  "deps": {
+    "importcfg": "foo.importcfg",
+    "facts": {"example.com/mod/pkg/bar": "bar.plaidfacts"}
+  },
+  "module": {"go_mod": "go.mod", "path": "example.com/mod"},
+  "analysis": {"config": ".golangci.yml", "mode": "full"},
+  "out": {"facts": "foo.plaidfacts", "sarif": "foo.plaid.sarif"}
+}
+```
+
+- `analysis.mode` is `full` (default), `facts_only` (fact-producing analyzers only, no
+  diagnostics — for dependencies excluded from the lint scope, like nogo's `-facts_only`), or
+  `module` (go.mod-scoped linters such as `gomoddirectives`; run once per module).
+- Findings are results, not failures: they are recorded in the SARIF output and never affect the
+  exit code. Exit codes: `0` analysis completed, `2` bad flags, `3` unusable inputs or internal
+  error, `7` invalid `.golangci` config.
+- Every declared output is written on every success — including packages that fail to
+  type-check, which surface as `typecheck` findings with an empty fact set.
+- All caching is the build system's concern: unit mode reads and writes no plaid-lint caches.
+
 ## Cache Configuration
 
 By default, all cache tiers use the local filesystem under the platform cache directory with a `plaid-lint` suffix.
