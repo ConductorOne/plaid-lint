@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "pkgbits",
+    srcs = [
+        "codes.go",
+        "decoder.go",
+        "doc.go",
+        "encoder.go",
+        "flags.go",
+        "reloc.go",
+        "support.go",
+        "sync.go",
+        "syncmarker_string.go",
+        "version.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/pkgbits",
+    visibility = ["//internal/gopls:__subpackages__"],
+)
+
+go_test(
+    name = "pkgbits_test",
+    srcs = ["pkgbits_test.go"],
+    deps = [":pkgbits"],
+)

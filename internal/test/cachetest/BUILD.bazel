@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cachetest",
+    srcs = ["cachetest.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/test/cachetest",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/cache"],
+)

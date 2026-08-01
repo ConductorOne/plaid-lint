@@ -13,8 +13,9 @@ import (
 // driver version is intentionally absent here (CLI surface concern,
 // wired in by T2.4).
 type Sarif struct {
-	w         io.Writer
-	sanitizer *severitySanitizer
+	w             io.Writer
+	sanitizer     *severitySanitizer
+	runProperties map[string]any
 }
 
 const (
@@ -33,6 +34,16 @@ func NewSarif(w io.Writer) *Sarif {
 	}
 }
 
+// SetRunProperties attaches a SARIF §3.8 property bag to the run
+// object of subsequent Print calls. nil (the default) omits the
+// field entirely, keeping property-less output byte-identical to the
+// pre-properties format. Producers use this to carry machine-readable
+// run metadata (e.g. plaid-lint unit records the analyzed package
+// and file set so a collector can aggregate across runs).
+func (p *Sarif) SetRunProperties(props map[string]any) {
+	p.runProperties = props
+}
+
 type sarifOutput struct {
 	Version string     `json:"version"`
 	Schema  string     `json:"$schema"`
@@ -40,8 +51,9 @@ type sarifOutput struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool       sarifTool      `json:"tool"`
+	Results    []sarifResult  `json:"results"`
+	Properties map[string]any `json:"properties,omitempty"`
 }
 
 type sarifTool struct {
@@ -112,7 +124,10 @@ type sarifRegion struct {
 }
 
 func (p *Sarif) Print(diags []Diagnostic) error {
-	run := sarifRun{Results: make([]sarifResult, 0, len(diags))}
+	run := sarifRun{
+		Results:    make([]sarifResult, 0, len(diags)),
+		Properties: p.runProperties,
+	}
 	run.Tool.Driver.Name = "plaid-lint"
 
 	for i := range diags {

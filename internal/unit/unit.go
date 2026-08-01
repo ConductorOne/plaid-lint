@@ -117,7 +117,7 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 	res.Diagnostics = diags
 
 	// Write declared outputs. SARIF first (always named), then facts.
-	if err := writeSarif(cfg.Out.Sarif, res.Diagnostics); err != nil {
+	if err := writeSarif(cfg, res.Diagnostics); err != nil {
 		return nil, err
 	}
 	if cfg.Out.Facts != "" {
@@ -232,22 +232,34 @@ func typecheckDiagnostics(cp *checkedPackage) []output.Diagnostic {
 	return diags
 }
 
-// writeSarif writes the SARIF output.
-func writeSarif(path string, diags []output.Diagnostic) error {
-	var buf, err = renderSarif(diags)
+// writeSarif writes the SARIF output, stamping the run's property
+// bag with the unit's identity (package path, mode, analyzed file
+// set) so a downstream collector can aggregate across actions —
+// e.g. the unused test-variant supersede rule needs to know which
+// runs analyzed strict supersets of which file sets.
+func writeSarif(cfg *Config, diags []output.Diagnostic) error {
+	buf, err := renderSarif(cfg, diags)
 	if err != nil {
 		return fmt.Errorf("unit: render sarif: %w", err)
 	}
-	if err := writeFileAtomic(path, buf); err != nil {
+	if err := writeFileAtomic(cfg.Out.Sarif, buf); err != nil {
 		return fmt.Errorf("unit: write sarif: %w", err)
 	}
 	return nil
 }
 
 // renderSarif serializes diagnostics via the shared SARIF printer.
-func renderSarif(diags []output.Diagnostic) ([]byte, error) {
+func renderSarif(cfg *Config, diags []output.Diagnostic) ([]byte, error) {
 	var b safeBuffer
-	if err := output.NewSarif(&b).Print(diags); err != nil {
+	p := output.NewSarif(&b)
+	p.SetRunProperties(map[string]any{
+		"plaidUnit": map[string]any{
+			"package": cfg.Package.Path,
+			"mode":    string(cfg.EffectiveMode()),
+			"goFiles": cfg.Package.GoFiles,
+		},
+	})
+	if err := p.Print(diags); err != nil {
 		return nil, err
 	}
 	return b.bytes, nil

@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "symbols",
+    srcs = ["symbols.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/cache/symbols",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/cache/parsego",
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/protocol",
+        "//internal/gopls/util/frob",
+    ],
+)

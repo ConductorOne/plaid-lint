@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "aliases",
+    srcs = ["aliases.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/aliases",
+    visibility = ["//internal/gopls:__subpackages__"],
+)
+
+go_test(
+    name = "aliases_test",
+    srcs = ["aliases_test.go"],
+    deps = [
+        ":aliases",
+        "//internal/gopls/internal/testenv",
+    ],
+)

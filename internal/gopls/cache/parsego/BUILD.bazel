@@ -1,0 +1,40 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "parsego",
+    srcs = [
+        "file.go",
+        "parse.go",
+        "resolver.go",
+        "resolver_compat.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/cache/parsego",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/internal/diff",
+        "//internal/gopls/internal/event",
+        "//internal/gopls/label",
+        "//internal/gopls/protocol",
+        "//internal/gopls/util/bug",
+        "//internal/gopls/util/safetoken",
+        "@org_golang_x_tools//go/ast/inspector",
+    ],
+)
+
+go_test(
+    name = "parsego_test",
+    srcs = [
+        "parse_test.go",
+        "resolver_test.go",
+    ],
+    embed = [":parsego"],
+    deps = [
+        "//internal/gopls/internal/astutil",
+        "//internal/gopls/internal/testenv",
+        "//internal/gopls/util/safetoken",
+        "//internal/gopls/util/tokeninternal",
+        "@org_golang_x_tools//go/ast/astutil",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

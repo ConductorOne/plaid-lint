@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "l0",
+    srcs = ["l0.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/l0",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/cache",
+        "//internal/output",
+    ],
+)
+
+go_test(
+    name = "l0_test",
+    srcs = [
+        "crossmachine_test.go",
+        "dispatch_test.go",
+        "l0_test.go",
+    ],
+    embed = [":l0"],
+    deps = [
+        "//internal/cache",
+        "//internal/output",
+    ],
+)

@@ -1,0 +1,50 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "imports",
+    srcs = [
+        "fix.go",
+        "imports.go",
+        "mod.go",
+        "mod_cache.go",
+        "sortimports.go",
+        "source.go",
+        "source_env.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/imports",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/gocommand",
+        "//internal/gopls/internal/gopathwalk",
+        "//internal/gopls/internal/stdlib",
+        "@org_golang_x_mod//module",
+        "@org_golang_x_sync//errgroup",
+        "@org_golang_x_tools//go/ast/astutil",
+    ],
+)
+
+go_test(
+    name = "imports_test",
+    srcs = [
+        "fix_test.go",
+        "imports_test.go",
+        "mod_cache_test.go",
+        "mod_test.go",
+        "source_modindex_test.go",
+        "sourcex_test.go",
+    ],
+    embed = [":imports"],
+    deps = [
+        "//internal/gopls/internal/gocommand",
+        "//internal/gopls/internal/gopathwalk",
+        "//internal/gopls/internal/modindex",
+        "//internal/gopls/internal/packagestest",
+        "//internal/gopls/internal/proxydir",
+        "//internal/gopls/internal/stdlib",
+        "//internal/gopls/internal/testenv",
+        "@com_github_google_go_cmp//cmp",
+        "@org_golang_x_mod//module",
+        "@org_golang_x_tools//txtar",
+    ],
+)

@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "quiet",
+    srcs = ["quiet.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/quiet",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "quiet_test",
+    srcs = ["quiet_test.go"],
+    embed = [":quiet"],
+)

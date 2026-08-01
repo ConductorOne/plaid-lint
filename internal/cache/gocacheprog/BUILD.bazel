@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gocacheprog",
+    srcs = ["client.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/cache/gocacheprog",
+    visibility = ["//:__subpackages__"],
+    deps = ["@org_golang_x_sync//singleflight"],
+)
+
+go_test(
+    name = "gocacheprog_test",
+    srcs = ["client_test.go"],
+    embed = [":gocacheprog"],
+)

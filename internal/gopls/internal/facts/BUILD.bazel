@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "facts",
+    srcs = [
+        "facts.go",
+        "imports.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/facts",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/typesinternal",
+        "//internal/gopls/internal/typesyncmu",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/types/objectpath",
+    ],
+)
+
+go_test(
+    name = "facts_test",
+    srcs = [
+        "facts_test.go",
+        "race_test.go",
+    ],
+    deps = [
+        ":facts",
+        "//internal/cache",
+        "//internal/gopls/internal/testenv",
+        "//internal/gopls/internal/typesinternal",
+        "//internal/gopls/internal/typesyncmu",
+        "@org_golang_x_tools//go/analysis/analysistest",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

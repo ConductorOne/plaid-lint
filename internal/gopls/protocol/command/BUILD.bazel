@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "command",
+    srcs = [
+        "command_gen.go",
+        "interface.go",
+        "util.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/protocol/command",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/protocol",
+        "//internal/gopls/vulncheck",
+    ],
+)

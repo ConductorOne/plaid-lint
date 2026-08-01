@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "free",
+    srcs = ["free.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/astutil/free",
+    visibility = ["//internal/gopls:__subpackages__"],
+)
+
+go_test(
+    name = "free_test",
+    srcs = ["free_test.go"],
+    deps = [":free"],
+)

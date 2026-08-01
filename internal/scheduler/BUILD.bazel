@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "scheduler",
+    srcs = [
+        "cache_adapter.go",
+        "estimator.go",
+        "observation.go",
+        "rss.go",
+        "scheduler.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/scheduler",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/gopls/cache",
+        "//internal/l3",
+        "@org_golang_x_sync//errgroup",
+    ],
+)
+
+go_test(
+    name = "scheduler_test",
+    srcs = [
+        "gate_contention_test.go",
+        "observation_test.go",
+        "run_acquire_equiv_test.go",
+        "scheduler_test.go",
+    ],
+    embed = [":scheduler"],
+)

@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "compare-lints_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/conductorone/plaid-lint/cmd/compare-lints",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "compare-lints",
+    embed = [":compare-lints_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "compare-lints_test",
+    srcs = ["main_test.go"],
+    embed = [":compare-lints_lib"],
+)

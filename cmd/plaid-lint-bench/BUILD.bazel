@@ -1,0 +1,31 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "plaid-lint-bench_lib",
+    srcs = [
+        "main.go",
+        "profile_allocs.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/cmd/plaid-lint-bench",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/analyzers",
+        "//internal/bench",
+        "//internal/gopls/settings",
+        "//internal/quiet",
+        "//internal/scheduler",
+        "@org_golang_x_tools//go/analysis",
+    ],
+)
+
+go_binary(
+    name = "plaid-lint-bench",
+    embed = [":plaid-lint-bench_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "plaid-lint-bench_test",
+    srcs = ["parse_gomemsize_test.go"],
+    embed = [":plaid-lint-bench_lib"],
+)

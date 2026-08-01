@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "file",
+    srcs = [
+        "file.go",
+        "hash.go",
+        "kind.go",
+        "modification.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/file",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/gopls/protocol"],
+)

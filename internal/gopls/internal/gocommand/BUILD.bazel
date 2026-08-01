@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gocommand",
+    srcs = [
+        "invoke.go",
+        "invoke_notunix.go",
+        "invoke_unix.go",
+        "vendor.go",
+        "version.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/gocommand",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/event",
+        "//internal/gopls/internal/event/keys",
+        "//internal/gopls/internal/event/label",
+        "@org_golang_x_mod//semver",
+    ],
+)
+
+go_test(
+    name = "gocommand_test",
+    srcs = [
+        "invoke_test.go",
+        "version_test.go",
+    ],
+    embed = [":gocommand"],
+    deps = [
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_sync//errgroup",
+    ],
+)

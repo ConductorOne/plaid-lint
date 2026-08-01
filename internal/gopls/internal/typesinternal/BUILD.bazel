@@ -1,0 +1,44 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "typesinternal",
+    srcs = [
+        "classify_call.go",
+        "element.go",
+        "errorcode.go",
+        "errorcode_string.go",
+        "fx.go",
+        "isnamed.go",
+        "qualifier.go",
+        "recv.go",
+        "toonew.go",
+        "types.go",
+        "varkind.go",
+        "varkind_go124.go",
+        "zerovalue.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/typesinternal",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/stdlib",
+        "//internal/gopls/internal/versions",
+        "@org_golang_x_tools//go/ast/inspector",
+        "@org_golang_x_tools//go/types/typeutil",
+    ],
+)
+
+go_test(
+    name = "typesinternal_test",
+    srcs = [
+        "classify_call_test.go",
+        "element_test.go",
+        "errorcode_test.go",
+        "fx_test.go",
+        "zerovalue_test.go",
+    ],
+    deps = [
+        ":typesinternal",
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_tools//go/types/typeutil",
+    ],
+)

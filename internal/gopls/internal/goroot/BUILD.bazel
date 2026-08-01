@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "goroot",
+    srcs = ["importcfg.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/goroot",
+    visibility = ["//internal/gopls:__subpackages__"],
+)

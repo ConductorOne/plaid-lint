@@ -1,0 +1,46 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "output",
+    srcs = [
+        "canonicalize.go",
+        "checkstyle.go",
+        "codeclimate.go",
+        "convert.go",
+        "diagnostic.go",
+        "html.go",
+        "json.go",
+        "junitxml.go",
+        "printer.go",
+        "sarif.go",
+        "tab.go",
+        "teamcity.go",
+        "text.go",
+        "util.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/output",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/canonicalpath",
+        "//internal/gopls/cache",
+        "//internal/gopls/protocol",
+    ],
+)
+
+go_test(
+    name = "output_test",
+    srcs = [
+        "convert_test.go",
+        "fixtures_test.go",
+        "golden_test.go",
+        "printer_test.go",
+        "sarif_fixes_test.go",
+        "teamcity_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":output"],
+    deps = [
+        "//internal/gopls/cache",
+        "//internal/gopls/protocol",
+    ],
+)

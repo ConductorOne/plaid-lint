@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "persistent",
+    srcs = [
+        "map.go",
+        "set.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/util/persistent",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/gopls/util/constraints"],
+)
+
+go_test(
+    name = "persistent_test",
+    srcs = [
+        "map_test.go",
+        "race_test.go",
+        "set_test.go",
+    ],
+    embed = [":persistent"],
+    deps = [
+        "//internal/gopls/util/constraints",
+        "@org_golang_x_sync//errgroup",
+    ],
+)

@@ -1,0 +1,51 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "unit",
+    srcs = [
+        "collect.go",
+        "config.go",
+        "exec.go",
+        "facts_io.go",
+        "hermetic.go",
+        "importcfg.go",
+        "module_mode.go",
+        "typecheck.go",
+        "unit.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/unit",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "//internal/exclusion",
+        "//internal/gopls/driverutil",
+        "//internal/gopls/facts",
+        "//internal/output",
+        "//internal/registry",
+        "@com_github_ldez_gomoddirectives//:gomoddirectives",
+        "@org_golang_x_mod//modfile",
+        "@org_golang_x_sync//errgroup",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/gcexportdata",
+    ],
+)
+
+go_test(
+    name = "unit_test",
+    srcs = [
+        "driver_test.go",
+        "factaudit_test.go",
+        "facts_determinism_test.go",
+        "hermetic_differential_test.go",
+        "hermetic_test.go",
+        "infra_error_test.go",
+    ],
+    embed = [":unit"],
+    deps = [
+        "//internal/config",
+        "//internal/exclusion",
+        "//internal/registry",
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

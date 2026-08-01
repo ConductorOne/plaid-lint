@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "strip-tracecheck-config_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/conductorone/plaid-lint/cmd/strip-tracecheck-config",
+    visibility = ["//visibility:private"],
+    deps = ["@in_gopkg_yaml_v3//:yaml_v3"],
+)
+
+go_binary(
+    name = "strip-tracecheck-config",
+    embed = [":strip-tracecheck-config_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "strip-tracecheck-config_test",
+    srcs = ["main_test.go"],
+    embed = [":strip-tracecheck-config_lib"],
+    deps = ["@in_gopkg_yaml_v3//:yaml_v3"],
+)

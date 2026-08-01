@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "expect",
+    srcs = [
+        "expect.go",
+        "extract.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/expect",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = ["@org_golang_x_mod//modfile"],
+)
+
+go_test(
+    name = "expect_test",
+    srcs = ["expect_test.go"],
+    deps = [":expect"],
+)

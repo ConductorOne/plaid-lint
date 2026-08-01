@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "typesyncmu",
+    srcs = ["typesyncmu.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/typesyncmu",
+    visibility = ["//internal/gopls:__subpackages__"],
+)
+
+go_test(
+    name = "typesyncmu_test",
+    srcs = ["typesyncmu_test.go"],
+    embed = [":typesyncmu"],
+)

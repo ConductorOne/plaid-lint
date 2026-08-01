@@ -1,0 +1,54 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "cache",
+    srcs = [
+        "atomic.go",
+        "backend.go",
+        "cache.go",
+        "codec.go",
+        "fileset.go",
+        "gocacheprog_backend.go",
+        "keys.go",
+        "l1.go",
+        "l2.go",
+        "l2_gcexportdata.go",
+        "local_backend.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/cache",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/cache/gocacheprog",
+        "@org_golang_x_tools//go/gcexportdata",
+    ],
+)
+
+go_test(
+    name = "cache_test",
+    srcs = [
+        "backend_test.go",
+        "bench_test.go",
+        "cache_test.go",
+        "dispatch_test.go",
+        "fileset_perpackage_test.go",
+        "fileset_test.go",
+        "gocacheprog_backend_test.go",
+        "l1_actionid_test.go",
+        "l2_actionid_test.go",
+        "l2_analyzer_test.go",
+        "l2_equivalence_test.go",
+        "l2_gcexportdata_test.go",
+        "splitcacheprog_test.go",
+        "stress_test.go",
+    ],
+    embed = [":cache"],
+    deps = [
+        "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/analysis/passes/assign",
+        "@org_golang_x_tools//go/analysis/passes/inspect",
+        "@org_golang_x_tools//go/analysis/passes/nilfunc",
+        "@org_golang_x_tools//go/analysis/passes/printf",
+        "@org_golang_x_tools//go/analysis/passes/unusedresult",
+        "@org_golang_x_tools//go/ast/inspector",
+    ],
+)

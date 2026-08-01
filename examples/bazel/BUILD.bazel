@@ -1,0 +1,13 @@
+load("@plaid_lint//bazel:defs.bzl", "plaid_module_lint")
+
+plaid_module_lint(
+    name = "module_lint",
+    config = "//:.golangci.yml",
+    go_mod = "//:go.mod",
+    module_path = "example.com/plaidexample",
+)
+
+exports_files(
+    [".golangci.yml", "go.mod"],
+    visibility = ["//visibility:public"],
+)

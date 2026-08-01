@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "memoize",
+    srcs = ["memoize.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/util/memoize",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "memoize_test",
+    srcs = ["memoize_test.go"],
+    deps = [":memoize"],
+)

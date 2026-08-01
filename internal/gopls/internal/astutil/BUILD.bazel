@@ -1,0 +1,39 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "astutil",
+    srcs = [
+        "clone.go",
+        "comment.go",
+        "cursor.go",
+        "equal.go",
+        "fields.go",
+        "purge.go",
+        "stringlit.go",
+        "unpack.go",
+        "util.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/astutil",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/moreiters",
+        "//internal/gopls/internal/typeparams",
+        "@org_golang_x_tools//go/ast/edge",
+        "@org_golang_x_tools//go/ast/inspector",
+    ],
+)
+
+go_test(
+    name = "astutil_test",
+    srcs = [
+        "comment_test.go",
+        "fields_test.go",
+        "purge_test.go",
+        "stringlit_test.go",
+    ],
+    deps = [
+        ":astutil",
+        "//internal/gopls/internal/testenv",
+        "@org_golang_x_tools//go/packages",
+    ],
+)

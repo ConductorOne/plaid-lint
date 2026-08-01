@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "testenv",
+    srcs = [
+        "exec.go",
+        "testenv.go",
+        "testenv_notunix.go",
+        "testenv_unix.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/testenv",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/gocommand",
+        "@org_golang_x_mod//modfile",
+    ],
+)

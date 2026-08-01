@@ -1,0 +1,31 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "modindex",
+    srcs = [
+        "directories.go",
+        "index.go",
+        "lookup.go",
+        "modindex.go",
+        "symbols.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/gopls/internal/modindex",
+    visibility = ["//internal/gopls:__subpackages__"],
+    deps = [
+        "//internal/gopls/internal/gopathwalk",
+        "@org_golang_x_mod//module",
+        "@org_golang_x_mod//semver",
+        "@org_golang_x_sync//errgroup",
+    ],
+)
+
+go_test(
+    name = "modindex_test",
+    srcs = [
+        "dir_test.go",
+        "export_test.go",
+        "lookup_test.go",
+    ],
+    embed = [":modindex"],
+    deps = ["@com_github_google_go_cmp//cmp"],
+)
