@@ -168,8 +168,7 @@ const (
 )
 
 // backendForTier returns the backend name selected for tier, honouring
-// the per-tier override (PLAID_L0_CACHE_BACKEND, PLAID_L1_CACHE_BACKEND,
-// PLAID_L2_CACHE_BACKEND) and falling back to the global
+// the per-tier backend override first, then falling back to
 // PLAID_CACHE_BACKEND, then to "local".
 //
 // L1 is excluded from the global gocacheprog fallback: when
@@ -198,6 +197,22 @@ func backendForTier(tier string) string {
 	return "local"
 }
 
+// cacheProgForTier returns the command for tier's gocacheprog helper. A
+// tier-specific helper takes precedence over the Go toolchain's global helper.
+func cacheProgForTier(tier string) string {
+	if v := tierCacheProg(tier); v != "" {
+		return v
+	}
+	return os.Getenv("GOCACHEPROG")
+}
+
+func tierCacheProg(tier string) string {
+	if tier == "" {
+		return ""
+	}
+	return os.Getenv("PLAID_" + strings.ToUpper(tier) + "_GOCACHEPROG")
+}
+
 // selectBackend picks a backend for the global default (no per-tier
 // override). Equivalent to selectBackendForTier(root, ""); kept for
 // callers that don't know — or don't care about — the tier.
@@ -215,9 +230,12 @@ func selectBackendForTier(root, tier string) (backend, error) {
 	case "local":
 		return newLocalBackend(root), nil
 	case "gocacheprog":
-		binary := os.Getenv("GOCACHEPROG")
+		binary := cacheProgForTier(tier)
 		if binary == "" {
-			return nil, errors.New("plaid-lint: cache backend \"gocacheprog\" requires GOCACHEPROG env var to point at the helper binary")
+			if tier == "" {
+				return nil, errors.New("plaid-lint: cache backend \"gocacheprog\" requires GOCACHEPROG env var to point at the helper binary")
+			}
+			return nil, fmt.Errorf("plaid-lint: cache backend \"gocacheprog\" requires PLAID_%s_GOCACHEPROG or GOCACHEPROG to point at the helper binary", strings.ToUpper(tier))
 		}
 		return newGocacheprogBackend(binary)
 	default:

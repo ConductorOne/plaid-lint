@@ -80,9 +80,50 @@ func clearBackendEnv(t *testing.T) {
 		"PLAID_L0_CACHE_BACKEND",
 		"PLAID_L1_CACHE_BACKEND",
 		"PLAID_L2_CACHE_BACKEND",
+		"PLAID_L0_GOCACHEPROG",
+		"PLAID_L1_GOCACHEPROG",
+		"PLAID_L2_GOCACHEPROG",
+		"GOCACHEPROG",
 	} {
 		t.Setenv(k, "")
 	}
+}
+
+func TestBackendForTier_TierHelperDoesNotSelectBackend(t *testing.T) {
+	clearBackendEnv(t)
+	t.Setenv("PLAID_L1_GOCACHEPROG", "/some/l1-helper")
+	if got := backendForTier(TierL1); got != "local" {
+		t.Errorf("backendForTier(L1) with only a tier helper: got %q, want %q", got, "local")
+	}
+}
+
+func TestCacheProgForTier_PrefersTierHelper(t *testing.T) {
+	clearBackendEnv(t)
+	t.Setenv("GOCACHEPROG", "/some/global-helper")
+	t.Setenv("PLAID_L2_GOCACHEPROG", "/some/l2-helper")
+	if got := cacheProgForTier(TierL2); got != "/some/l2-helper" {
+		t.Errorf("cacheProgForTier(L2): got %q, want tier helper", got)
+	}
+	if got := cacheProgForTier(TierL0); got != "/some/global-helper" {
+		t.Errorf("cacheProgForTier(L0): got %q, want global helper", got)
+	}
+}
+
+func TestSelectBackendForTier_UsesTierHelper(t *testing.T) {
+	clearBackendEnv(t)
+	t.Setenv("GOCACHEPROG", "/not/the/helper/to-use")
+	t.Setenv("PLAID_L2_GOCACHEPROG", stubHelper(t))
+	t.Setenv("PLAID_L2_CACHE_BACKEND", "gocacheprog")
+
+	b, err := selectBackendForTier(t.TempDir(), TierL2)
+	if err != nil {
+		t.Fatalf("selectBackendForTier(L2): %v", err)
+	}
+	gb, ok := b.(*gocacheprogBackend)
+	if !ok {
+		t.Fatalf("L2 backend type: got %T, want *gocacheprogBackend", b)
+	}
+	t.Cleanup(func() { _ = gb.Close() })
 }
 
 // TestBackendForTier_AllLocalByDefault pins the current default: no env
