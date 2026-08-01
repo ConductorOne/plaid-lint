@@ -89,7 +89,7 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 					pkgPath, len(diags)))
 			}
 		} else {
-			roots, skipped := selectRoots(reg, cfg.EffectiveMode())
+			roots, skipped := selectRoots(reg, golangci, cfg.EffectiveMode())
 			res.Warnings = append(res.Warnings, skipped...)
 			er, err := runAnalyzers(ctx, cfg, cp, roots)
 			if err != nil {
@@ -131,12 +131,13 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 // selectRoots derives the root analyzer set for the mode from the
 // registry's enabled resolution. Module-scoped linters are excluded
 // from package modes (they run in ModeModule; their wrappers would
-// shell out to the toolchain — see moduleScopedLinters). Returns
-// human-readable notes for anything skipped.
+// shell out to the toolchain — see moduleScopedLinters), and linters
+// that cannot honor the hermeticity contract are refused loudly (see
+// hermeticSkip). Returns human-readable notes for anything skipped.
 //
 // In ModeFactsOnly the roots are narrowed to the fact-producing
 // analyzers — see factProducers.
-func selectRoots(reg *registry.Registry, mode Mode) ([]analyzerEntry, []string) {
+func selectRoots(reg *registry.Registry, golangci *config.Config, mode Mode) ([]analyzerEntry, []string) {
 	var roots []analyzerEntry
 	var notes []string
 	for _, r := range reg.Enabled() {
@@ -148,6 +149,10 @@ func selectRoots(reg *registry.Registry, mode Mode) ([]analyzerEntry, []string) 
 		if isModuleScoped(r.Name) {
 			notes = append(notes,
 				fmt.Sprintf("linter %s is module-scoped; run a mode=module action for it", r.Name))
+			continue
+		}
+		if warn, skip := hermeticSkip(r.Name, golangci); skip {
+			notes = append(notes, warn)
 			continue
 		}
 		// Attribute diagnostics by the analyzer's own name, matching

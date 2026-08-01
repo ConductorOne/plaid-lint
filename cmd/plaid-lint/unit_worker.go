@@ -26,8 +26,17 @@ import (
 // settings by mutating package-global analyzer FlagSets inside the
 // wire closures, so two configs must never be active concurrently in
 // one process. Requests within one Bazel invocation share a config,
-// so rebuilds are rare; the registry is rebuilt whenever a request's
-// config content differs from the previous one.
+// so the per-config state (parsed config, registry, filter) is
+// memoized in a unitSession and rebuilt only when a request's config
+// path, content digest, or enable_only set differs from the previous
+// request's (see unitOnce).
+//
+// Worker SANDBOXING is unsupported by design: unit.json paths resolve
+// against the worker's working directory, so a sandboxed request
+// (non-empty sandboxDir) would silently read the wrong generation of
+// inputs. rules_plaid never sets supports-worker-sandboxing; a
+// request carrying sandboxDir is answered with an error rather than
+// wrong-but-cached outputs.
 type workRequest struct {
 	Arguments  []string   `json:"arguments,omitempty"`
 	Inputs     []workFile `json:"inputs,omitempty"`
@@ -62,6 +71,7 @@ func unitWorkerLoop(in io.Reader, out io.Writer) int {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
 	enc := json.NewEncoder(out)
+	sess := &unitSession{}
 
 	for sc.Scan() {
 		line := sc.Bytes()
@@ -83,6 +93,14 @@ func unitWorkerLoop(in io.Reader, out io.Writer) int {
 			_ = enc.Encode(workResponse{RequestID: req.RequestID, WasCancelled: true})
 			continue
 		}
+		if req.SandboxDir != "" {
+			_ = enc.Encode(workResponse{
+				ExitCode:  int32(exitInternalError),
+				RequestID: req.RequestID,
+				Output:    "plaid-lint: unit worker: worker sandboxing (sandboxDir) is not supported; do not set supports-worker-sandboxing",
+			})
+			continue
+		}
 
 		cfgPath, err := unitCfgFromArgs(req.Arguments)
 		var (
@@ -92,7 +110,7 @@ func unitWorkerLoop(in io.Reader, out io.Writer) int {
 		if err != nil {
 			code, msgs = exitCLIError, []string{err.Error()}
 		} else {
-			code, msgs = unitOnce(context.Background(), cfgPath)
+			code, msgs = unitOnce(context.Background(), cfgPath, sess)
 		}
 		resp := workResponse{
 			ExitCode:  int32(code),

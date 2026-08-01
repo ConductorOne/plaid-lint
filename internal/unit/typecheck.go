@@ -5,6 +5,7 @@
 package unit
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -46,6 +47,17 @@ type exportDataImporter struct {
 
 	mu      sync.Mutex
 	imports map[string]*types.Package
+
+	// infraErrs collects failures reading or decoding files the
+	// importcfg DECLARED. Those are broken action inputs (a wiring
+	// bug, a corrupt artifact), not properties of the source under
+	// analysis — they must fail the action rather than surface as
+	// `typecheck` findings, or a facts_only action would go green
+	// with an empty fact set and silently lose downstream findings.
+	// A path simply missing from the importcfg stays a type error:
+	// that is what a source file importing an undeclared package
+	// legitimately looks like.
+	infraErrs []error
 }
 
 func (imp *exportDataImporter) Import(path string) (*types.Package, error) {
@@ -63,7 +75,9 @@ func (imp *exportDataImporter) Import(path string) (*types.Package, error) {
 	}
 	f, err := os.Open(file)
 	if err != nil {
-		return nil, fmt.Errorf("open export data for %q: %w", path, err)
+		err = fmt.Errorf("open export data for %q: %w", path, err)
+		imp.infraErrs = append(imp.infraErrs, err)
+		return nil, err
 	}
 	defer f.Close()
 	// NewReader locates the export data section whether the file is
@@ -72,11 +86,15 @@ func (imp *exportDataImporter) Import(path string) (*types.Package, error) {
 	// tolerance nogo's importer has.
 	r, err := gcexportdata.NewReader(f)
 	if err != nil {
-		return nil, fmt.Errorf("export data for %q (%s): %w", path, file, err)
+		err = fmt.Errorf("export data for %q (%s): %w", path, file, err)
+		imp.infraErrs = append(imp.infraErrs, err)
+		return nil, err
 	}
 	pkg, err := gcexportdata.Read(r, imp.fset, imp.imports, path)
 	if err != nil {
-		return nil, fmt.Errorf("decode export data for %q (%s): %w", path, file, err)
+		err = fmt.Errorf("decode export data for %q (%s): %w", path, file, err)
+		imp.infraErrs = append(imp.infraErrs, err)
+		return nil, err
 	}
 	return pkg, nil
 }
@@ -163,6 +181,14 @@ func typecheck(cfg *Config) (*checkedPackage, error) {
 	// arrived through tcfg.Error, so the return is redundant here.
 	_ = checker.Files(cp.files)
 	cp.pkg = pkg
+
+	// Broken DECLARED inputs fail the action (see infraErrs). This is
+	// checked after Files so every importer failure is collected, and
+	// takes precedence over the typecheck-findings path: type errors
+	// caused by an unreadable artifact are not source findings.
+	if len(imp.infraErrs) > 0 {
+		return nil, fmt.Errorf("unit: broken action inputs: %w", errors.Join(imp.infraErrs...))
+	}
 
 	return cp, nil
 }

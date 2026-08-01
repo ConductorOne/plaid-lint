@@ -6,9 +6,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/exclusion"
@@ -31,6 +33,11 @@ func (a *app) runUnit(args []string) int {
 	cfgPath := fs.String("cfg", "", "path to the unit.json action config (required)")
 	workerMode := fs.Bool("worker", false, "run as a Bazel persistent worker (JSON protocol on stdin/stdout)")
 
+	args, aerr := expandArgsFiles(args)
+	if aerr != nil {
+		fmt.Fprintf(a.stderr, "plaid-lint: unit: %v\n", aerr)
+		return exitCLIError
+	}
 	if err := fs.Parse(args); err != nil {
 		return exitCLIError
 	}
@@ -50,11 +57,61 @@ func (a *app) runUnit(args []string) int {
 		return exitCLIError
 	}
 
-	code, msgs := unitOnce(context.Background(), *cfgPath)
+	code, msgs := unitOnce(context.Background(), *cfgPath, &unitSession{})
 	for _, m := range msgs {
 		fmt.Fprintf(a.stderr, "plaid-lint: %s\n", m)
 	}
 	return code
+}
+
+// expandArgsFiles substitutes any `@file` argument with the file's
+// newline-separated contents — the params-file convention Bazel uses
+// when an action's argv exceeds the command-line limit and,
+// mandatorily, when a target advertises worker support (the trailing
+// @flagfile carries the per-request args for non-worker fallback
+// execution).
+func expandArgsFiles(args []string) ([]string, error) {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "@") || len(arg) == 1 {
+			out = append(out, arg)
+			continue
+		}
+		body, err := os.ReadFile(arg[1:])
+		if err != nil {
+			return nil, fmt.Errorf("params file %s: %w", arg, err)
+		}
+		for line := range strings.Lines(string(body)) {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+			if line != "" {
+				out = append(out, line)
+			}
+		}
+	}
+	return out, nil
+}
+
+// unitSession memoizes the per-config state (parsed .golangci config,
+// built registry, exclusion filter) across unit invocations in one
+// process. The persistent worker reuses one session so identical
+// configs — the common case, since every action in a Bazel invocation
+// shares the workspace's .golangci.yml — skip the config parse and
+// the full registry rebuild.
+//
+// Reuse is keyed on (config path, config content digest, enable_only
+// set): a changed config rebuilds everything. NOT safe for concurrent
+// use — registry.BuildFromConfig applies per-linter settings by
+// mutating package-global analyzer FlagSets, so sessions must only be
+// used from a serial loop (the worker is serial by design).
+type unitSession struct {
+	configPath string
+	digest     [32]byte
+	enableOnly string
+
+	golangci *config.Config
+	reg      *registry.Registry
+	filter   *exclusion.Filter
 }
 
 // unitOnce runs a single unit action. Returned messages go to stderr
@@ -63,7 +120,7 @@ func (a *app) runUnit(args []string) int {
 // Findings never influence the exit code: the SARIF output is the
 // findings channel, and a separate consumer (a Bazel validation
 // action, a CI collector) decides what fails.
-func unitOnce(ctx context.Context, cfgPath string) (int, []string) {
+func unitOnce(ctx context.Context, cfgPath string, sess *unitSession) (int, []string) {
 	var msgs []string
 
 	ucfg, err := unit.LoadConfig(cfgPath)
@@ -71,43 +128,63 @@ func unitOnce(ctx context.Context, cfgPath string) (int, []string) {
 		return exitInternalError, append(msgs, err.Error())
 	}
 
-	golangci, cfgWarnings, err := loadUnitGolangciConfig(ucfg)
-	if err != nil {
-		return exitConfigError, append(msgs, err.Error())
-	}
-	for _, w := range cfgWarnings {
-		msgs = append(msgs, fmt.Sprintf("warning: %s: %s", w.Field, w.Message))
-	}
-	if errs := config.Validate(golangci); len(errs) > 0 {
-		for _, e := range errs {
-			msgs = append(msgs, fmt.Sprintf("config error: %v", e))
+	var digest [32]byte
+	if ucfg.Analysis.Config != "" {
+		body, rerr := os.ReadFile(ucfg.Analysis.Config)
+		if rerr != nil {
+			return exitConfigError, append(msgs, fmt.Sprintf("read config: %v", rerr))
 		}
-		return exitConfigError, msgs
+		digest = sha256.Sum256(body)
 	}
+	enableOnly := strings.Join(ucfg.Analysis.EnableOnly, ",")
 
-	reg, regWarnings, err := registry.BuildFromConfig(golangci)
-	if err != nil {
-		return exitInternalError, append(msgs, err.Error())
-	}
-	for _, w := range regWarnings {
-		msgs = append(msgs, fmt.Sprintf("warning: %s: %s", w.Field, w.Message))
-	}
-	if len(ucfg.Analysis.EnableOnly) > 0 {
-		reg, err = reg.SelectAnalyzers(ucfg.Analysis.EnableOnly)
+	if sess.golangci == nil || sess.configPath != ucfg.Analysis.Config ||
+		sess.digest != digest || sess.enableOnly != enableOnly {
+		golangci, cfgWarnings, err := loadUnitGolangciConfig(ucfg)
+		if err != nil {
+			return exitConfigError, append(msgs, err.Error())
+		}
+		for _, w := range cfgWarnings {
+			msgs = append(msgs, fmt.Sprintf("warning: %s: %s", w.Field, w.Message))
+		}
+		if errs := config.Validate(golangci); len(errs) > 0 {
+			for _, e := range errs {
+				msgs = append(msgs, fmt.Sprintf("config error: %v", e))
+			}
+			return exitConfigError, msgs
+		}
+
+		reg, regWarnings, err := registry.BuildFromConfig(golangci)
 		if err != nil {
 			return exitInternalError, append(msgs, err.Error())
 		}
+		for _, w := range regWarnings {
+			msgs = append(msgs, fmt.Sprintf("warning: %s: %s", w.Field, w.Message))
+		}
+		if len(ucfg.Analysis.EnableOnly) > 0 {
+			reg, err = reg.SelectAnalyzers(ucfg.Analysis.EnableOnly)
+			if err != nil {
+				return exitInternalError, append(msgs, err.Error())
+			}
+		}
+
+		// The exclusion filter anchors path-relative rules at the
+		// process working directory — the execroot under Bazel —
+		// matching how the declared source paths are spelled.
+		filter, err := exclusion.NewFilter(golangci, mustGetwd(), nil)
+		if err != nil {
+			return exitInternalError, append(msgs, fmt.Sprintf("exclusion filter: %v", err))
+		}
+
+		sess.configPath = ucfg.Analysis.Config
+		sess.digest = digest
+		sess.enableOnly = enableOnly
+		sess.golangci = golangci
+		sess.reg = reg
+		sess.filter = filter
 	}
 
-	// The exclusion filter anchors path-relative rules at the process
-	// working directory — the execroot under Bazel — matching how the
-	// declared source paths are spelled.
-	filter, err := exclusion.NewFilter(golangci, mustGetwd(), nil)
-	if err != nil {
-		return exitInternalError, append(msgs, fmt.Sprintf("exclusion filter: %v", err))
-	}
-
-	res, err := unit.Run(ctx, ucfg, golangci, reg, filter)
+	res, err := unit.Run(ctx, ucfg, sess.golangci, sess.reg, sess.filter)
 	if err != nil {
 		return exitInternalError, append(msgs, err.Error())
 	}

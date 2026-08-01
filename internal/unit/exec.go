@@ -236,9 +236,13 @@ func runOne(cfg *Config, cp *checkedPackage, e analyzerEntry, inputs map[*analys
 	if err != nil {
 		return nil, nil, err
 	}
-	// Mirror the x/tools driver contract check: the result type must
-	// match Analyzer.ResultType.
-	if got, want := reflect.TypeOf(result), a.ResultType; got != want && a.ResultType != nil && result != nil {
+	// Mirror the x/tools driver contract check exactly: the result
+	// type must equal Analyzer.ResultType in both directions — an
+	// untyped-nil result from an analyzer that declared a type, and a
+	// non-nil result from one that declared none, are both driver
+	// errors here rather than misattributed panics in a consumer's
+	// pass.ResultOf assertion later.
+	if got, want := reflect.TypeOf(result), a.ResultType; got != want {
 		return nil, nil, fmt.Errorf("internal error: result type %v, declared %v", got, want)
 	}
 	return result, diags, nil
