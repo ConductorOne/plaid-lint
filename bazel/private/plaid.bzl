@@ -72,6 +72,15 @@ def _pkg_key(data):
 def _is_external(target):
     return target.label.workspace_root.startswith("external/")
 
+def _is_vendored(target):
+    package = target.label.package
+    return (
+        package == "vendor" or
+        package.startswith("vendor/") or
+        package == "local_vendor" or
+        package.startswith("local_vendor/")
+    )
+
 def _matches_prefix(importpath, prefixes):
     for p in prefixes:
         if importpath == p or importpath.startswith(p if p.endswith("/") else p + "/"):
@@ -264,11 +273,11 @@ def _lint_archive(env, target, archive, base_name, by_key):
     cfg_out = ctx.actions.declare_file(base_name + ".plaid-unit.json")
     importcfg_out = ctx.actions.declare_file(base_name + ".plaid-importcfg")
 
-    # Scope: external-repo packages and configured prefix matches run
-    # facts_only — their facts feed importers, but they are not lint
-    # subjects (nogo's includes/excludes semantics). Likewise archives
-    # made entirely of generated files (rules_go's synthesized
-    # testmain, protoc output): build machinery, not lint subjects.
+    # Scope: external-repo and main-repository vendored packages plus
+    # configured prefix matches run facts_only — their facts feed importers,
+    # but they are not lint subjects (nogo's includes/excludes semantics).
+    # Likewise archives made entirely of generated files (rules_go's
+    # synthesized testmain, protoc output) are build machinery, not subjects.
     #
     # A facts_only prefix covering a package must cover its test
     # variants too, and test-archive importpaths live in synthesized
@@ -295,7 +304,7 @@ def _lint_archive(env, target, archive, base_name, by_key):
             if env.module_path:
                 match_paths.append(env.module_path + "/" + pkg_dir)
     mode = "full"
-    if _is_external(target) or any([_matches_prefix(p, env.facts_only) for p in match_paths]):
+    if _is_external(target) or _is_vendored(target) or any([_matches_prefix(p, env.facts_only) for p in match_paths]):
         mode = "facts_only"
     if not any([s.is_source for s in srcs]):
         mode = "facts_only"

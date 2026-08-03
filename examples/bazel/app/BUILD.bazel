@@ -5,5 +5,9 @@ go_library(
     srcs = ["app.go"],
     importpath = "example.com/plaidexample/app",
     visibility = ["//visibility:public"],
-    deps = ["//lib"],
+    deps = [
+        "//lib",
+        "//local_vendor/example.com/localdep",
+        "//vendor/example.com/dependency",
+    ],
 )

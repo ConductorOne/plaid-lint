@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "localdep",
+    srcs = ["localdep.go"],
+    importpath = "example.com/localdep",
+    visibility = ["//visibility:public"],
+)

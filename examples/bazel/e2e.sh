@@ -165,8 +165,9 @@ pass "(h) use_worker actions fall back to one-shot execution under non-worker st
 # must fail with exactly the seeded enforced findings — `unused`
 # survives only where no test-variant run supersedes it (neverUsed,
 # xHelper), plus the printf, errcheck, and gomoddirectives findings —
-# while superseded findings (lib.testOnly, unusedpkg.testedOnly) and
-# exported symbols never appear. The runner's verdict line pins the
+# while superseded findings (lib.testOnly, unusedpkg.testedOnly), exported
+# symbols, and private declarations in main-repository vendor packages never
+# appear. The runner's verdict line pins the
 # exact enforced count so a new seeded finding (or a lost one) fails
 # this assertion, not just "some findings exist".
 run test //:lint
@@ -183,12 +184,12 @@ for want in \
   "FAIL — 5 enforced finding(s)"; do
   grep -qF "$want" "$TESTLOG" || fail "(i) expected '$want' in $TESTLOG"
 done
-for absent in "testedOnly" "testOnly is unused" "Exported"; do
+for absent in "testedOnly" "testOnly is unused" "Exported" "vendorDead" "localVendorDead"; do
   if grep -qF "$absent" "$TESTLOG"; then
     fail "(i) did not expect '$absent' in $TESTLOG"
   fi
 done
-pass "(i) bazel test //:lint fails with exactly the 5 enforced findings; superseded findings absent"
+pass "(i) suite keeps vendored dependencies facts-only and enforces exactly the 5 first-party findings"
 
 # (j) A clean suite scope passes: lib's only finding (unused
 # testOnly) is superseded by the in-package test archive, so
