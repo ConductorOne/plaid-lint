@@ -21,6 +21,9 @@
 #      one-shot execution
 #  11. bazel build of a suite target is report-only (a red gate never
 #      fails a plain build) and publishes the text report
+#  12. the opt-in unit result cache (`unit --cache-dir`) reproduces a
+#      cold run byte for byte, ignores the ambient environment, and
+#      rekeys when a declared source changes
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -342,5 +345,78 @@ impls = [n for n in names if n in ("tagged_arm64.go", "tagged_noasm.go")]
 sys.exit(0 if len(impls) == 1 and "tagged.go" in names else 1)
 PY
 pass "(s) //tagged lints cleanly: constraint-excluded file never reaches the type-checker"
+
+# (t) The opt-in unit result cache. The aspect writes a complete
+# unit.json per archive, so the cache can be exercised against real
+# Bazel-shaped declared inputs — execroot-relative sources, an
+# importcfg of compiled dependencies, and the compiled stdlib tree —
+# by replaying that action outside Bazel. Three properties:
+#
+#   * a cold cached run reproduces the aspect's own SARIF byte for
+#     byte (the cache is not in the analysis path when it misses);
+#   * a repeat run under a hostile environment — the variables that
+#     steer every OTHER cache in this repo — writes the same bytes and
+#     publishes no second entry, so no ambient state reached the key
+#     (the Go tests prove the hit path itself, by serving a poisoned
+#     entry);
+#   * touching one declared source publishes a SECOND entry, so a
+#     changed input is recomputed rather than replayed.
+#
+# The rewritten output paths are absolute (a scratch directory), which
+# is why this replay never disturbs the aspect's own declared outputs.
+run build --config=lint --norun_validations //lib:lib
+[[ "$CODE" -eq 0 ]] || fail "(t) expected report-only lint of //lib:lib to succeed"
+EXECROOT="$("$BAZEL" info execution_root)"
+UNIT_CFG="$BAZEL_BIN/lib/lib.plaid-unit.json"
+[[ -f "$UNIT_CFG" ]] || fail "(t) expected the aspect's unit.json at $UNIT_CFG"
+# Re-resolve the binary rather than reusing (g)'s path: the clean in
+# (h) removed that output tree.
+run build @plaid_lint//cmd/plaid-lint
+[[ "$CODE" -eq 0 ]] || fail "(t) expected @plaid_lint//cmd/plaid-lint to build"
+PLAID_REL_T="$("$BAZEL" cquery --output=files @plaid_lint//cmd/plaid-lint 2>/dev/null | head -1)"
+[[ -x "./$PLAID_REL_T" ]] || fail "(t) could not locate the plaid-lint binary (got: ${PLAID_REL_T:-<empty>})"
+PLAID_BIN="$(cd "$(dirname "./$PLAID_REL_T")" && pwd)/$(basename "$PLAID_REL_T")"
+CACHE_DIR="$(mktemp -d)"
+UNIT_OUT="$(mktemp -d)"
+UNIT_CFG_REPLAY="$UNIT_OUT/unit.json"
+python3 - "$UNIT_CFG" "$UNIT_CFG_REPLAY" "$UNIT_OUT" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+cfg["out"]["sarif"] = sys.argv[3] + "/out.sarif"
+cfg["out"]["facts"] = sys.argv[3] + "/out.plaidfacts"
+json.dump(cfg, open(sys.argv[2], "w"))
+PY
+
+cache_entries() { find "$1" -type f | wc -l | tr -d ' '; }
+
+(cd "$EXECROOT" && "$PLAID_BIN" unit --cfg "$UNIT_CFG_REPLAY" --cache-dir "$CACHE_DIR") \
+  || fail "(t) cold cached unit run failed"
+cmp -s "$UNIT_OUT/out.sarif" "$BAZEL_BIN/lib/lib.plaid.sarif" \
+  || fail "(t) standalone cached unit SARIF differs from the aspect's"
+[[ "$(cache_entries "$CACHE_DIR")" == "1" ]] \
+  || fail "(t) expected exactly one cache entry after the cold run, got $(cache_entries "$CACHE_DIR")"
+
+rm -f "$UNIT_OUT/out.sarif" "$UNIT_OUT/out.plaidfacts"
+(cd "$EXECROOT" && env GOCACHEPROG=/nonexistent/cacheprog XDG_CACHE_HOME=/nonexistent/xdg \
+   HOME=/nonexistent/home GOCACHE=/nonexistent/gocache PLAID_CACHE_BACKEND=gocacheprog \
+   "$PLAID_BIN" unit --cfg "$UNIT_CFG_REPLAY" --cache-dir "$CACHE_DIR") \
+  || fail "(t) repeat cached unit run failed under a changed environment"
+cmp -s "$UNIT_OUT/out.sarif" "$BAZEL_BIN/lib/lib.plaid.sarif" \
+  || fail "(t) cached SARIF differs from the cold run under a changed environment"
+[[ "$(cache_entries "$CACHE_DIR")" == "1" ]] \
+  || fail "(t) the ambient environment changed the cache key (entries: $(cache_entries "$CACHE_DIR"))"
+
+cp lib/lib.go lib/lib.go.cache-bak
+printf '\n// e2e(t): content change forcing a new cache key\n' >>lib/lib.go
+set +e
+(cd "$EXECROOT" && "$PLAID_BIN" unit --cfg "$UNIT_CFG_REPLAY" --cache-dir "$CACHE_DIR")
+UNIT_CODE=$?
+set -e
+mv lib/lib.go.cache-bak lib/lib.go
+[[ "$UNIT_CODE" -eq 0 ]] || fail "(t) cached unit run failed after the source change"
+[[ "$(cache_entries "$CACHE_DIR")" == "2" ]] \
+  || fail "(t) a changed declared source did not produce a new cache key (entries: $(cache_entries "$CACHE_DIR"))"
+rm -rf "$CACHE_DIR" "$UNIT_OUT"
+pass "(t) unit --cache-dir reproduces a cold run, ignores ambient state, and rekeys on a source change"
 
 echo "OK: all e2e assertions passed"
