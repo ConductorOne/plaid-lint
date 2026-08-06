@@ -90,7 +90,35 @@ plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
   error, `7` invalid `.golangci` config.
 - Every declared output is written on every success — including packages that fail to
   type-check, which surface as `typecheck` findings with an empty fact set.
-- All caching is the build system's concern: unit mode reads and writes no plaid-lint caches.
+- All caching is the build system's concern by default: unit mode opens none of plaid-lint's
+  L0/L1/L2 caches, because those resolve their root from the ambient environment
+  (`XDG_CACHE_HOME`, `PLAID_*`, `GOCACHEPROG`) and an action must not depend on host state the
+  build system cannot see.
+
+### Optional result cache
+
+`--cache-dir DIR` turns on a content-addressed cache of completed unit actions. It is off unless
+asked for, and it preserves the property above:
+
+```sh
+plaid-lint unit --cfg unit.json --cache-dir /path/to/cache
+```
+
+- The key is derived from the declared inputs only — the `unit.json` bytes plus the content of
+  every file it names (sources, ignored sources, the importcfg and every export-data file it
+  lists, dependency facts, the `.golangci` config, `go.mod`, the declared stdlib tree) — plus the
+  analyzing binary's own content digest. No environment variable participates, so the same
+  action returns the same answer on a developer's machine and on a CI worker.
+- A hit reproduces a cold run byte for byte: same SARIF, same `.plaidfacts`, same warnings, same
+  exit status. Any change to any declared input recomputes.
+- Entries are immutable and published atomically, so one directory can be shared by concurrent
+  actions and — when the declared paths are relative, as a build system emits them — between
+  checkouts and machines.
+- The cache is an accelerator, never a source of truth: an unreadable declared input, an
+  unwritable cache root or a corrupt entry degrades to an ordinary uncached run.
+
+Enabling it is the invoker's choice. The Bazel aspect does not pass the flag: doing so would
+change the action keys it computes and invalidate every consumer's remote cache on upgrade.
 
 ## Bazel
 

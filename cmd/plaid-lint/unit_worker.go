@@ -62,16 +62,19 @@ type workResponse struct {
 // protocol until stdin closes. Each request carries the same argv a
 // one-shot invocation would: ["--cfg", "<path>"] (a single
 // "--cfg=<path>" token is also accepted).
-func (a *app) runUnitWorker() int {
-	return unitWorkerLoop(os.Stdin, a.stdout)
+//
+// The session is built once, from the startup flags: --cache-dir is a
+// worker-lifetime setting, since a per-request cache directory would
+// let two requests in one process disagree about where results live.
+func (a *app) runUnitWorker(sess *unitSession) int {
+	return unitWorkerLoop(os.Stdin, a.stdout, sess)
 }
 
 // unitWorkerLoop is the testable core of runUnitWorker.
-func unitWorkerLoop(in io.Reader, out io.Writer) int {
+func unitWorkerLoop(in io.Reader, out io.Writer, sess *unitSession) int {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
 	enc := json.NewEncoder(out)
-	sess := &unitSession{}
 
 	for sc.Scan() {
 		line := sc.Bytes()
