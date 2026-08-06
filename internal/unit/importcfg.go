@@ -11,6 +11,16 @@ import (
 	"strings"
 )
 
+// ImportcfgFiles returns the importpath → export-data-file mapping an
+// importcfg declares, with importmap aliases resolved.
+//
+// Exported for the optional unit cache (internal/unitcache), whose key
+// must cover the content of every export-data file this action can
+// read — not just the importcfg line naming it.
+func ImportcfgFiles(path string) (map[string]string, error) {
+	return parseImportcfg(path)
+}
+
 // parseImportcfg reads a compiler-style importcfg file and returns the
 // importpath → export-data-file map from its `packagefile` lines.
 //

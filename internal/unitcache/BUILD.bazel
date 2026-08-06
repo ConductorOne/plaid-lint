@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "unitcache",
+    srcs = [
+        "key.go",
+        "store.go",
+    ],
+    importpath = "github.com/conductorone/plaid-lint/internal/unitcache",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/unit"],
+)
+
+go_test(
+    name = "unitcache_test",
+    srcs = [
+        "key_test.go",
+        "store_test.go",
+    ],
+    embed = [":unitcache"],
+    deps = ["//internal/unit"],
+)

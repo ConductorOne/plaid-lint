@@ -35,6 +35,7 @@ go_library(
         "//internal/registry",
         "//internal/subproc",
         "//internal/unit",
+        "//internal/unitcache",
     ],
 )
 
@@ -54,6 +55,7 @@ go_test(
         "run_test.go",
         "sink_test.go",
         "trace_path_test.go",
+        "unit_cache_test.go",
         "unit_cli_test.go",
         "unit_parity_test.go",
         "unit_worker_test.go",
@@ -63,6 +65,7 @@ go_test(
     deps = [
         "//internal/config",
         "//internal/unit",
+        "//internal/unitcache",
         "@org_golang_x_tools//go/packages",
     ],
 )
