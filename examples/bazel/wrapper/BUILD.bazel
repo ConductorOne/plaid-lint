@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+# A source-less aggregation target: it has no Go sources of its own,
+# so the aspect produces no report for it and only forwards //lib's.
+# Listing it in a report_scope = "targets" suite is a configuration
+# error — the scope would be empty.
+go_library(
+    name = "wrapper",
+    srcs = [],
+    importpath = "example.com/plaidexample/wrapper",
+    visibility = ["//visibility:public"],
+    deps = ["//lib"],
+)

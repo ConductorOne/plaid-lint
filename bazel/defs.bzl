@@ -150,6 +150,37 @@ def plaid_lint_aspect(
 # stay distinct: findings fail the TEST; an unreadable report or
 # analyzer crash fails the PlaidCollect ACTION (a build error); a bad
 # .golangci config fails the PlaidLint actions themselves.
+#
+# By default the suite's scope is the targets' whole dependency
+# closure: `targets = ["//cmd/server"]` enforces every first-party
+# package that binary reaches. A repository adopting the gate one
+# subtree at a time wants the other scope — enforce exactly the
+# listed roots:
+#
+#   plaid_lint_suite_test(
+#       name = "lint",
+#       report_scope = "targets",
+#       targets = [
+#           "//pkg/store",
+#           "//pkg/store:store_test",   # keeps `unused` test-aware
+#       ],
+#   )
+#
+# Dependencies of those roots are still analyzed and still hand each
+# root the export data and `.plaidfacts` its own analysis needs — a
+# cross-package fact (a printf wrapper defined in a dependency, say)
+# still produces findings AT the root. Only the dependencies' own
+# findings leave the scope. `report_scope = "targets"` is therefore
+# about who is a lint SUBJECT, never about what a subject gets to
+# see; the `facts_only` setting says the same thing by importpath
+# prefix instead of by target.
+#
+# Two consequences worth stating: the `unused` supersede rule can
+# only fire when the superseding test target is itself in scope (list
+# a package's go_test next to its go_library), and listing a target
+# that produces no reports of its own — a wrapper that merely
+# forwards its dependencies' — is a configuration error rather than a
+# silently empty gate.
 plaid_lint_suite_test = _plaid_lint_suite_test
 
 plaid_lint_suite_aspect = _plaid_lint_suite_aspect

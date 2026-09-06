@@ -266,6 +266,20 @@ Semantics:
   to bazel-bin, but only `bazel test` enforces the verdict — a red gate never
   breaks a plain build.
 - **`ignore_linters`** prints but never fails on the named linters' findings.
+- **`report_scope` picks what the suite is responsible for.** The default,
+  `"transitive"`, enforces every first-party package reachable from `targets`
+  through deps/embeds: one top-level root gates its whole closure.
+  `report_scope = "targets"` enforces only the listed targets' own packages.
+  Their dependencies are still visited by the aspect and still hand each root
+  the export data and `.plaidfacts` its analysis consumes — cross-package
+  facts (a printf wrapper defined in a dependency, an analyzer fact crossing
+  package boundaries) still produce findings *at the root* — the dependencies'
+  own findings simply are not this suite's to report. Two consequences: list a
+  package's `go_test` next to its `go_library` when you want the `unused`
+  supersede rule to fire (the superseding report has to be in scope), and a
+  listed target that produces no report of its own — a source-less wrapper that
+  merely forwards its dependencies' — is an analysis error rather than a
+  silently empty gate.
 
 ### Adopting in a large monorepo
 
@@ -308,6 +322,15 @@ fully cached and incremental after that):
 - **Non-Go targets in `targets` are a loud analysis error**, never a silent
   scope reduction. If a wrapper macro hands the suite a non-`GoArchive` target,
   the build fails naming it.
+- **Adopt subtree by subtree with `report_scope = "targets"`.** A closure-scoped
+  suite over one root inherits every finding in everything that root imports,
+  which makes a large repository all-or-nothing. The narrow scope makes each
+  suite own exactly the packages it lists, so teams can land gates
+  independently while the roots still get their dependencies' facts and types
+  (the dependency packages are analyzed either way — the difference is whether
+  they are lint *subjects*). This is the per-target counterpart of
+  `facts_only`, which says the same thing by import-path prefix and applies
+  globally to an invocation.
 
 See [examples/bazel](examples/bazel) for a complete consumer workspace — seeded
 findings, worker variant, module lint — exercised end to end by its `e2e.sh`.

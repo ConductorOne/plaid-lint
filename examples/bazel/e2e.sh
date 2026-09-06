@@ -24,6 +24,10 @@
 #  12. the opt-in unit result cache (`unit --cache-dir`) reproduces a
 #      cold run byte for byte, ignores the ambient environment, and
 #      rekeys when a declared source changes
+#  13. report_scope: the default suite enforces a root's whole
+#      dependency closure, report_scope = "targets" enforces only the
+#      listed roots while their dependencies keep supplying facts and
+#      types, and a report-less root is a configuration error
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -418,5 +422,52 @@ mv lib/lib.go.cache-bak lib/lib.go
   || fail "(t) a changed declared source did not produce a new cache key (entries: $(cache_entries "$CACHE_DIR"))"
 rm -rf "$CACHE_DIR" "$UNIT_OUT"
 pass "(t) unit --cache-dir reproduces a cold run, ignores ambient state, and rekeys on a source change"
+
+# (u) Report scope. //app imports //lib; //lib carries an unused
+# private (testOnly) with no superseding test archive in this scope,
+# and //app carries its own printf + errcheck findings. The SAME root
+# under the two scopes must differ by exactly the dependency's
+# finding:
+#
+#   * default (report_scope = "transitive"): 3 enforced — the root's
+#     two plus the dependency's, i.e. the pre-existing behavior every
+#     other assertion in this file relies on;
+#   * report_scope = "targets": 2 enforced — the root's own, with the
+#     dependency's absent.
+#
+# The invariant that makes the narrow scope honest rather than blind
+# is the printf finding SURVIVING it: `lib.Logf` is only known to be
+# a printf wrapper through //lib's exported .plaidfacts, so a scope
+# that stopped feeding dependency facts to the root would silently
+# lose that finding instead of the dependency's own.
+run test //:lint_app_transitive
+[[ "$CODE" -ne 0 ]] || fail "(u) expected //:lint_app_transitive to fail on the seeded findings"
+TRANSITIVE_LOG="$("$BAZEL" info bazel-testlogs)/lint_app_transitive/test.log"
+[[ -f "$TRANSITIVE_LOG" ]] || fail "(u) expected test log at $TRANSITIVE_LOG"
+for want in "printf" "errcheck" "func testOnly is unused" "FAIL — 3 enforced finding(s)"; do
+  grep -qF "$want" "$TRANSITIVE_LOG" || fail "(u) expected '$want' in $TRANSITIVE_LOG"
+done
+
+run test //:lint_app_direct
+[[ "$CODE" -ne 0 ]] || fail "(u) expected //:lint_app_direct to fail on the root's own findings"
+DIRECT_LOG="$("$BAZEL" info bazel-testlogs)/lint_app_direct/test.log"
+[[ -f "$DIRECT_LOG" ]] || fail "(u) expected test log at $DIRECT_LOG"
+for want in "errcheck" "FAIL — 2 enforced finding(s)"; do
+  grep -qF "$want" "$DIRECT_LOG" || fail "(u) expected '$want' in $DIRECT_LOG"
+done
+if grep -qF "func testOnly is unused" "$DIRECT_LOG"; then
+  fail "(u) a dependency's finding leaked into a report_scope = \"targets\" suite"
+fi
+grep -qF "lib.Logf format %d reads arg #1" "$DIRECT_LOG" \
+  || fail "(u) the root lost its dependency-fact-derived printf finding under report_scope = \"targets\""
+
+# A root that contributes no reports of its own (//wrapper declares no
+# sources) would make the narrow scope silently empty; it is rejected
+# at analysis time instead.
+run test //:lint_wrapper_direct
+[[ "$CODE" -ne 0 ]] || fail "(u) expected //:lint_wrapper_direct to fail analysis"
+grep -q "contribute no reports of their own" <<<"$OUT" \
+  || fail "(u) expected the report-less-root configuration error, got: $OUT"
+pass "(u) report_scope narrows enforcement to the listed roots while dependency facts still reach them"
 
 echo "OK: all e2e assertions passed"
