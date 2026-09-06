@@ -379,6 +379,7 @@ func wireAnalyzerFns(c *catalog) {
 	wireAnalyzerFnsGocritic(c)
 	wireAnalyzerFnsRevive(c)
 	wireAnalyzerFnsTracecheck(c)
+	wireAnalyzerFnsQueryscope(c)
 	wireAnalyzerFnsCleanup(c)
 
 	// Tier 1 inline ports — three subprocess Runners replaced

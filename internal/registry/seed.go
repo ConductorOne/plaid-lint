@@ -149,6 +149,7 @@ func seedRows() []seedRow {
 		{name: "predeclared", shape: ShapeNative, fast: true},          // batch1
 		{name: "promlinter", shape: ShapeNative, fast: true},           // wrapbatch
 		{name: "protogetter", shape: ShapeNative},                      // batch5
+		{name: "queryscope", shape: ShapeNative, fast: true},              // configurable syntax-only analyzer
 		{name: "reassign", shape: ShapeNative},                         // batch4
 		{name: "recvcheck", shape: ShapeNative},                        // batch5
 		{name: "revive", shape: ShapeNative, hasGoVersion: true},       // revive

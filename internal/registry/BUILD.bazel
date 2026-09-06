@@ -25,6 +25,7 @@ go_library(
         "wire_analyzers_nolintlint.go",
         "wire_analyzers_polya.go",
         "wire_analyzers_revive.go",
+        "wire_analyzers_queryscope.go",
         "wire_analyzers_tracecheck.go",
         "wire_analyzers_wrapbatch.go",
         "wire_dogsled_native.go",
@@ -45,6 +46,7 @@ go_library(
     deps = [
         "//internal/analyzers",
         "//internal/analyzers/tracecheck",
+        "//internal/analyzers/queryscope",
         "//internal/config",
         "@cc_mvdan_unparam//check",
         "@co_honnef_go_tools//analysis/facts/directives",
@@ -238,6 +240,7 @@ go_test(
         "wire_analyzers_nolintlint_test.go",
         "wire_analyzers_polya_test.go",
         "wire_analyzers_revive_test.go",
+        "wire_analyzers_queryscope_test.go",
         "wire_analyzers_wrapbatch_test.go",
         "wire_dupl_native_test.go",
         "wire_errcheck_test.go",

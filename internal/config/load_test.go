@@ -50,6 +50,34 @@ linters:
 	}
 }
 
+func TestDecode_QueryScope(t *testing.T) {
+	body := []byte(`
+version: "2"
+linters:
+  default: none
+  enable:
+    - queryscope
+  settings:
+    queryscope:
+      unscoped-methods: [CountStar]
+      scoped-methods: [SelectCol]
+      scope-predicate-methods: [Where]
+      scope-field-names: [TenantId]
+      ignore-directive: queryscope:ignore
+`)
+	cfg, _, err := Decode(body, ".yml")
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	got := cfg.Linters.Settings.QueryScope
+	if len(got.UnscopedMethods) != 1 || got.UnscopedMethods[0] != "CountStar" {
+		t.Errorf("UnscopedMethods = %v, want [CountStar]", got.UnscopedMethods)
+	}
+	if got.IgnoreDirective != "queryscope:ignore" {
+		t.Errorf("IgnoreDirective = %q, want queryscope:ignore", got.IgnoreDirective)
+	}
+}
+
 func TestDecode_LegacyV1Skips(t *testing.T) {
 	body := []byte(`
 run:

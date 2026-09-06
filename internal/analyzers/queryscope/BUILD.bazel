@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "queryscope",
+    srcs = ["queryscope.go"],
+    importpath = "github.com/conductorone/plaid-lint/internal/analyzers/queryscope",
+    visibility = ["//:__subpackages__"],
+    deps = ["@org_golang_x_tools//go/analysis"],
+)
+
+go_test(
+    name = "queryscope_test",
+    srcs = ["queryscope_test.go"],
+    data = glob(["testdata/**"]),
+    deps = [
+        ":queryscope",
+        "@org_golang_x_tools//go/analysis/analysistest",
+    ],
+)
