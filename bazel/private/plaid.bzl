@@ -55,6 +55,13 @@ typed inputs with package identity, which the collector's
 test-variant supersede rule needs.""",
     fields = {
         "reports": "depset[PlaidReportInfo]: transitive lint reports.",
+        "direct_reports": "depset[PlaidReportInfo]: reports for THIS " +
+                          "target's own archives only, with nothing " +
+                          "contributed by deps or embeds. What an " +
+                          "aggregation rule collects when its scope is " +
+                          "the listed targets rather than their closure; " +
+                          "empty for a target with no compiled Go sources " +
+                          "of its own.",
     },
 )
 
@@ -205,27 +212,37 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
     if not lints:
         # Nothing of this target's own to lint (no compiled Go srcs);
         # still forward deps' reports so an aggregation rule sees
-        # through wrapper targets.
+        # through wrapper targets. direct_reports stays empty: a
+        # wrapper is not itself a lint subject, and a targets-scoped
+        # suite listing one must say so rather than silently enforce
+        # nothing.
         if transitive_reports:
-            return [PlaidLintInfo(reports = depset(transitive = transitive_reports))]
+            return [PlaidLintInfo(
+                reports = depset(transitive = transitive_reports),
+                direct_reports = depset(),
+            )]
         return []
 
+    direct_reports = [
+        PlaidReportInfo(
+            sarif = l.sarif,
+            package = l.package,
+            mode = l.mode,
+            label = target.label,
+        )
+        for l in lints
+    ]
     reports = depset(
-        direct = [
-            PlaidReportInfo(
-                sarif = l.sarif,
-                package = l.package,
-                mode = l.mode,
-                label = target.label,
-            )
-            for l in lints
-        ],
+        direct = direct_reports,
         transitive = transitive_reports,
     )
 
     providers = [
         PlaidFactsInfo(facts = main.facts if main else lints[0].facts, by_key = by_key),
-        PlaidLintInfo(reports = reports),
+        PlaidLintInfo(
+            reports = reports,
+            direct_reports = depset(direct_reports),
+        ),
     ]
     output_groups = {
         "plaid_report": depset([l.sarif for l in lints]),
@@ -601,10 +618,29 @@ def _suite_test_impl(ctx):
         fail("plaid_lint_suite_test %s: targets not visited by the plaid aspect (not Go targets providing GoArchive): %s" %
              (ctx.label, ", ".join(unlintable)))
 
-    reports = depset(transitive = [
-        t[PlaidLintInfo].reports
-        for t in ctx.attr.targets
-    ]).to_list()
+    # Report scope. "transitive" (the default) enforces every package
+    # reachable from `targets` through deps/embeds. "targets" enforces
+    # only the listed targets' own archives — their dependencies keep
+    # producing export data and .plaidfacts for the roots' analysis
+    # (that is the aspect's job and is unchanged), they simply stop
+    # being lint subjects of THIS suite.
+    if ctx.attr.report_scope == "targets":
+        rootless = [
+            str(t.label)
+            for t in ctx.attr.targets
+            if not t[PlaidLintInfo].direct_reports.to_list()
+        ]
+        if rootless:
+            fail(("plaid_lint_suite_test %s: report_scope = \"targets\" enforces only the listed " +
+                  "targets' own packages, but these contribute no reports of their own (they only " +
+                  "forward their dependencies'): %s. List the Go targets to enforce, or use " +
+                  "report_scope = \"transitive\".") %
+                 (ctx.label, ", ".join(rootless)))
+        report_depsets = [t[PlaidLintInfo].direct_reports for t in ctx.attr.targets]
+    else:
+        report_depsets = [t[PlaidLintInfo].reports for t in ctx.attr.targets]
+
+    reports = depset(transitive = report_depsets).to_list()
 
     # Only full-mode reports gate: facts_only archives (external
     # repos, generated code, configured prefixes) are dependencies of
@@ -787,7 +823,9 @@ plaid_lint_suite_test = rule(
             aspects = [plaid_lint_suite_aspect],
             doc = "Go targets to lint; the aspect visits their " +
                   "transitive deps/embeds, so top-level targets " +
-                  "(binaries, tests) suffice.",
+                  "(binaries, tests) suffice. Whether those visited " +
+                  "deps are lint SUBJECTS of this suite or only " +
+                  "fact/type providers for it is `report_scope`.",
         ),
         "go_mod": attr.label(
             allow_single_file = True,
@@ -804,12 +842,38 @@ plaid_lint_suite_test = rule(
                   "precisely to enforce `unused` after the " +
                   "test-variant supersede rule.",
         ),
+        "report_scope": attr.string(
+            default = "transitive",
+            values = ["transitive", "targets"],
+            doc = "Which packages this suite collects and enforces " +
+                  "reports for.\n\n" +
+                  "\"transitive\" (default): every package reachable " +
+                  "from `targets` through deps/embeds — one top-level " +
+                  "target gates its whole closure.\n\n" +
+                  "\"targets\": only the listed targets' own packages. " +
+                  "Dependencies are still analyzed and still supply the " +
+                  "export data and .plaidfacts each listed target's " +
+                  "analysis consumes, so cross-package facts (printf " +
+                  "wrappers, and so on) keep firing on the roots; the " +
+                  "dependencies' own findings are simply not this " +
+                  "suite's to report or enforce. Use it to gate a " +
+                  "subtree of a large repository without inheriting " +
+                  "findings from everything it imports. Listing a " +
+                  "target that contributes no reports of its own (a " +
+                  "wrapper that only forwards its dependencies') is an " +
+                  "error under this scope. If you rely on the " +
+                  "test-variant `unused` supersede rule, list a " +
+                  "package's go_test alongside its go_library — the " +
+                  "superseding report must be inside the scope.",
+        ),
     }),
     doc = """Aggregate lint gate. Collects every SARIF report the
 plaid_lint_suite_aspect produced over `targets` (through the typed
 PlaidLintInfo provider — never by walking bazel-bin), applies the
 test-variant unused supersede rule, and fails the TEST on surviving
-findings. Findings, analyzer/infrastructure failures, and config
+findings. `report_scope` selects whether that collection covers the
+targets' whole dependency closure (default) or only the targets
+themselves. Findings, analyzer/infrastructure failures, and config
 errors stay distinct: findings fail this test; an unreadable report
 fails the PlaidCollect action; a bad .golangci config fails the
 PlaidLint actions. `bazel build` on this target produces the

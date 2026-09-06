@@ -45,3 +45,35 @@ plaid_lint_suite_test(
         "//lib:lib_test",
     ],
 )
+
+# The same root under both report scopes. //app imports //lib, whose
+# unused `testOnly` has no superseding test archive in this scope, so
+# the default (transitive) suite reports it alongside //app's own
+# seeded findings.
+plaid_lint_suite_test(
+    name = "lint_app_transitive",
+    tags = ["manual"],  # red by design; run explicitly from e2e
+    targets = ["//app"],
+)
+
+# report_scope = "targets": only //app is a lint subject. //lib's own
+# findings leave the scope, but //lib is still analyzed and still
+# supplies //app's analysis with its export data and .plaidfacts —
+# which is why //app's printf finding, detectable ONLY through
+# //lib's exported printf-wrapper fact, survives the narrowing.
+plaid_lint_suite_test(
+    name = "lint_app_direct",
+    report_scope = "targets",
+    tags = ["manual"],  # red by design; run explicitly from e2e
+    targets = ["//app"],
+)
+
+# A source-less wrapper contributes no reports of its own. Under
+# report_scope = "targets" that is a configuration error, not a
+# silently empty gate (e2e asserts the analysis-time failure).
+plaid_lint_suite_test(
+    name = "lint_wrapper_direct",
+    report_scope = "targets",
+    tags = ["manual"],
+    targets = ["//wrapper"],
+)
