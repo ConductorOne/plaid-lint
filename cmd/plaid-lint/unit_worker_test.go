@@ -50,7 +50,7 @@ func TestUnitWorker_SequentialRequests(t *testing.T) {
 	fmt.Fprintf(&in, `{"arguments":["--cfg=%s"],"requestId":2}`+"\n", cfg2)
 
 	var out bytes.Buffer
-	if code := unitWorkerLoop(&in, &out); code != exitSuccess {
+	if code := unitWorkerLoop(&in, &out, &unitSession{}); code != exitSuccess {
 		t.Fatalf("worker loop exit=%d want %d (output=%q)", code, exitSuccess, out.String())
 	}
 
@@ -90,7 +90,7 @@ func TestUnitWorker_MissingCfgKeepsServing(t *testing.T) {
 	fmt.Fprintf(&in, `{"arguments":["--cfg",%q],"requestId":8}`+"\n", cfgOK)
 
 	var out bytes.Buffer
-	if code := unitWorkerLoop(&in, &out); code != exitSuccess {
+	if code := unitWorkerLoop(&in, &out, &unitSession{}); code != exitSuccess {
 		t.Fatalf("worker loop exit=%d want %d (output=%q)", code, exitSuccess, out.String())
 	}
 
@@ -118,7 +118,7 @@ func TestUnitWorker_MissingCfgKeepsServing(t *testing.T) {
 func TestUnitWorker_MalformedLine(t *testing.T) {
 	in := strings.NewReader("{this is not json}\n")
 	var out bytes.Buffer
-	if code := unitWorkerLoop(in, &out); code != exitInternalError {
+	if code := unitWorkerLoop(in, &out, &unitSession{}); code != exitInternalError {
 		t.Fatalf("worker loop exit=%d want %d", code, exitInternalError)
 	}
 	if out.Len() != 0 {
