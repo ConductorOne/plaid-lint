@@ -169,7 +169,7 @@ Validation: if `rules` non-empty, `default` must be set.
 **v1 source:** `linters-settings.{gofmt,goimports,gofumpt,gci,golines}`
 is mirrored across into `formatters.settings.*` during migration.
 
-## `LintersSettings` (88 per-linter blocks)
+## `LintersSettings` (upstream blocks plus built-in extensions)
 
 We **mirror upstream's full struct shape verbatim** so the canonical
 field set is unambiguous. The five complex linters per r7
@@ -185,11 +185,11 @@ hitter `govet` need extra care because of nested maps and arrays:
 | `forbidigo` | `forbid[]` array | Order-insensitive but custom unmarshal: each entry can be a raw string (the pattern) OR a struct `{p, pkg, msg}`. Upstream uses `mapstructure.TextUnmarshallerHookFunc` — we implement via yaml.v3's custom `UnmarshalYAML`. |
 | `govet`     | `enable`/`disable`/`enable-all`/`disable-all` + nested `settings: map[string]map[string]any` | Validates mutual exclusivity. |
 | `custom`    | `map[string]CustomLinterSettings` | Plugin loader. We accept the shape; loading the plugin is engine-side. |
+| `queryscope` | method and predicate evidence sets | Configures the built-in syntax-only query-builder scope rule without importing the query-builder implementation. |
 
-For all 88 blocks: define the typed struct mirroring upstream, plus a
-catch-all `Extra map[string]any \`yaml:",inline"\`` so unknown keys
-(future upstream additions) survive the round trip and don't fail the
-parser.
+Upstream blocks mirror the full struct shape verbatim. Built-in extensions,
+such as `queryscope`, add their documented typed configuration alongside that
+compatibility surface.
 
 ## v1 → v2 migration pipeline
 

@@ -21,7 +21,10 @@ go_library(
     ],
     importpath = "github.com/conductorone/plaid-lint/internal/config",
     visibility = ["//:__subpackages__"],
-    deps = ["@in_gopkg_yaml_v3//:yaml_v3"],
+    deps = [
+        "//internal/analyzers/queryscope",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
 )
 
 go_test(

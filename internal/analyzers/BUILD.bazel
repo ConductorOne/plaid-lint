@@ -37,6 +37,7 @@ go_test(
         "bundled_staticcheck_test.go",
         "configsalt_test.go",
         "registry_test.go",
+        "syntaxonly_register_test.go",
         "typeusescope_test.go",
     ],
     embed = [":analyzers"],

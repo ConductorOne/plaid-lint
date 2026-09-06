@@ -267,6 +267,8 @@ func perLinterSettings(cfg *config.Config, name string) any {
 		return &s.Promlinter
 	case "protogetter":
 		return &s.ProtoGetter
+	case "queryscope":
+		return &s.QueryScope
 	case "reassign":
 		return &s.Reassign
 	case "recvcheck":

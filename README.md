@@ -49,6 +49,37 @@ plaid-lint cache clean
 
 Output format selection uses `--out-format` and supports `text`, `json`, `sarif`, `checkstyle`, `codeclimate`, `junit-xml`, `tab`, `html`, and `teamcity`.
 
+## Query scope checks
+
+`queryscope` is a built-in, syntax-only analyzer for query builders that
+require an explicit scope predicate for selected methods. It does not import
+or depend on the query-builder implementation. Enable it and describe the
+builder's source-level scoping evidence:
+
+```yaml
+linters:
+  enable: [queryscope]
+  settings:
+    queryscope:
+      unscoped-methods: [CountStar]
+      scoped-methods: [SelectCol]
+      scoped-two-arg-string-methods: [Select, Count]
+      scope-predicate-methods: [Where]
+      scope-field-names: [TenantId]
+      scope-string-substrings: [tenant_id]
+      opt-out-method-contains: [IgnoreScope]
+      opt-out-methods: [WithDangerousCrossScope]
+      query-parameter-type-names: [Select]
+      scoped-method-min-args: {With: 3}
+      ignore-directive: queryscope:ignore
+```
+
+The analyzer reports an `unscoped-methods` call unless the enclosing function
+also contains configured scope evidence. It is intentionally function-local:
+when a function receives a configured query type as a parameter, it is treated
+as a caller-scoped wrapper. `//queryscope:ignore <reason>` is the documented
+last-resort escape hatch.
+
 ## Unit Mode (build-system actions)
 
 `plaid-lint unit` analyzes exactly one package from declared inputs — no `go list`, no module

@@ -7,7 +7,12 @@ package config
 import (
 	"errors"
 	"fmt"
+
+	"github.com/conductorone/plaid-lint/internal/analyzers/queryscope"
 )
+
+// QueryScope is the configuration for the built-in queryscope analyzer.
+type QueryScope = queryscope.Config
 
 // LintersSettings holds the per-linter configuration blocks. Field
 // shape mirrors upstream's `LintersSettings` struct verbatim (see
@@ -78,6 +83,7 @@ type LintersSettings struct {
 	Predeclared              PredeclaredSettings              `yaml:"predeclared,omitempty" json:"predeclared,omitempty"`
 	Promlinter               PromlinterSettings               `yaml:"promlinter,omitempty" json:"promlinter,omitempty"`
 	ProtoGetter              ProtoGetterSettings              `yaml:"protogetter,omitempty" json:"protogetter,omitempty"`
+	QueryScope               QueryScope                       `yaml:"queryscope,omitempty" json:"queryscope,omitempty"`
 	Reassign                 ReassignSettings                 `yaml:"reassign,omitempty" json:"reassign,omitempty"`
 	Recvcheck                RecvcheckSettings                `yaml:"recvcheck,omitempty" json:"recvcheck,omitempty"`
 	Revive                   ReviveSettings                   `yaml:"revive,omitempty" json:"revive,omitempty"`
@@ -109,6 +115,9 @@ type LintersSettings struct {
 func (s *LintersSettings) Validate() error {
 	if err := s.Govet.Validate(); err != nil {
 		return err
+	}
+	if err := s.QueryScope.Validate(); err != nil {
+		return fmt.Errorf("linters.settings.queryscope: %w", err)
 	}
 	for name, settings := range s.Custom {
 		if err := settings.Validate(); err != nil {
@@ -343,7 +352,7 @@ type GoCriticSettings struct {
 	DisableAll       bool                             `yaml:"disable-all,omitempty" json:"disable-all,omitempty"`
 	EnabledChecks    []string                         `yaml:"enabled-checks,omitempty" json:"enabled-checks,omitempty"`
 	EnableAll        bool                             `yaml:"enable-all,omitempty" json:"enable-all,omitempty"`
-	DisabledChecks  []string                         `yaml:"disabled-checks,omitempty" json:"disabled-checks,omitempty"`
+	DisabledChecks   []string                         `yaml:"disabled-checks,omitempty" json:"disabled-checks,omitempty"`
 	EnabledTags      []string                         `yaml:"enabled-tags,omitempty" json:"enabled-tags,omitempty"`
 	DisabledTags     []string                         `yaml:"disabled-tags,omitempty" json:"disabled-tags,omitempty"`
 	SettingsPerCheck map[string]GoCriticCheckSettings `yaml:"settings,omitempty" json:"settings,omitempty"`
@@ -361,10 +370,10 @@ type GoCycloSettings struct {
 
 // GodoclintSettings — `godoclint` linter (nested options shape).
 type GodoclintSettings struct {
-	Default *string             `yaml:"default,omitempty" json:"default,omitempty"`
-	Enable  []string            `yaml:"enable,omitempty" json:"enable,omitempty"`
-	Disable []string            `yaml:"disable,omitempty" json:"disable,omitempty"`
-	Options GodoclintOptions    `yaml:"options,omitempty" json:"options,omitempty"`
+	Default *string          `yaml:"default,omitempty" json:"default,omitempty"`
+	Enable  []string         `yaml:"enable,omitempty" json:"enable,omitempty"`
+	Disable []string         `yaml:"disable,omitempty" json:"disable,omitempty"`
+	Options GodoclintOptions `yaml:"options,omitempty" json:"options,omitempty"`
 }
 
 // GodoclintOptions — nested option groups under godoclint.

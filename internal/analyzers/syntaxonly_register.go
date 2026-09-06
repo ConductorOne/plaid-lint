@@ -29,11 +29,17 @@ import "golang.org/x/tools/go/analysis"
 // per instance over the process lifetime, all keyed by their own
 // pointer (no collisions, no leak in practice for batch runs).
 func RegisterSyntaxOnly(a *analysis.Analyzer, cacheVersion uint8) *analysis.Analyzer {
+	return RegisterSyntaxOnlyWithConfig(a, nil, cacheVersion)
+}
+
+// RegisterSyntaxOnlyWithConfig registers a syntax-only analyzer whose
+// configuration participates in the cache key.
+func RegisterSyntaxOnlyWithConfig(a *analysis.Analyzer, cfg any, cacheVersion uint8) *analysis.Analyzer {
 	if a == nil {
 		return nil
 	}
 	name := a.Name
-	salt := ConfigSalt(name, nil)
+	salt := ConfigSalt(name, cfg)
 	BundledRegistry.Register(&AnalyzerDescriptor{
 		Analyzer:     a,
 		KeyInputs:    []KeyInput{KeyInputAllPackageSource},
