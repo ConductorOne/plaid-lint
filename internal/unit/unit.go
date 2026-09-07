@@ -134,12 +134,12 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 	return res, nil
 }
 
-// selectRoots derives the root analyzer set for the mode from the
+// selectRoots derives the root analyzer set for package modes from the
 // registry's enabled resolution. Module-scoped linters are excluded
-// from package modes (they run in ModeModule; their wrappers would
-// shell out to the toolchain — see moduleScopedLinters), and linters
-// that cannot honor the hermeticity contract are refused loudly (see
-// hermeticSkip). Returns human-readable notes for anything skipped.
+// silently because they run in the separately scheduled ModeModule action;
+// their wrappers would shell out to the toolchain (see moduleScopedLinters).
+// Linters that cannot honor the hermeticity contract are refused loudly (see
+// hermeticSkip). Returns human-readable notes for those refusals.
 //
 // In ModeFactsOnly the roots are narrowed to the fact-producing
 // analyzers — see factProducers.
@@ -153,8 +153,6 @@ func selectRoots(reg *registry.Registry, golangci *config.Config, mode Mode) ([]
 			continue
 		}
 		if isModuleScoped(r.Name) {
-			notes = append(notes,
-				fmt.Sprintf("linter %s is module-scoped; run a mode=module action for it", r.Name))
 			continue
 		}
 		if warn, skip := hermeticSkip(r.Name, golangci); skip {
