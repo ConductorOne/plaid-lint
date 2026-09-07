@@ -98,3 +98,30 @@ linters:
 		t.Errorf("depguard without $gostd should run; notes=%v", notes2)
 	}
 }
+
+// TestModuleScopedLinterSkipIsSilent ensures package actions do not emit a
+// redundant warning for a linter that the Bazel suite runs in module mode.
+func TestModuleScopedLinterSkipIsSilent(t *testing.T) {
+	cfg, _, err := config.Decode([]byte(`
+version: "2"
+linters:
+  default: none
+  enable:
+    - gomoddirectives
+`), ".yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _, err := registry.BuildFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	roots, notes := selectRoots(reg, cfg, ModeFull)
+	if len(roots) != 0 {
+		t.Errorf("module-scoped linter appeared in package roots: %v", roots)
+	}
+	if len(notes) != 0 {
+		t.Errorf("module-scoped linter emitted package warning: %v", notes)
+	}
+}
