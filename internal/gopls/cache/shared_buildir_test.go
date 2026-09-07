@@ -249,23 +249,3 @@ func TestSharedBuildir_ProgramInitOnce(t *testing.T) {
 		t.Errorf("w.prog.Fset != fset")
 	}
 }
-
-// TestSharedBuildir_NoReturnFactReflection pins that we can construct
-// and read *noReturn fact values via reflection. The fact type lives
-// under honnef internal/, so we go through the Analyzer pointer like
-// production does.
-func TestSharedBuildir_NoReturnFactReflection(t *testing.T) {
-	bi := buildirAnalyzer(t)
-	w := &workspaceBuildir{
-		futures: make(map[*types.Package]*buildirFuture),
-	}
-	if err := w.rememberBuildirAnalyzer(bi); err != nil {
-		t.Fatalf("rememberBuildirAnalyzer: %v", err)
-	}
-
-	fact := w.newNoReturnFactPtr()
-	w.setNoReturnKind(fact, ir.AlwaysExits)
-	if got := w.noReturnKind(fact); got != ir.AlwaysExits {
-		t.Errorf("round-trip: got %v, want %v", got, ir.AlwaysExits)
-	}
-}

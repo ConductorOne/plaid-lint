@@ -51,8 +51,8 @@ func TestStaticcheckAnalyzerCount(t *testing.T) {
 	// honnef.co/go/tools dependency and got here, update the
 	// constants and document the SA-* delta.
 	const (
-		wantTotal       = 95
-		wantNewlyInW8   = 94 // SA1000 was wired in W7
+		wantTotal     = 95
+		wantNewlyInW8 = 94 // SA1000 was wired in W7
 	)
 	if saTotal != wantTotal {
 		t.Errorf("staticcheck SA-* analyzer count = %d, want %d (honnef.co/go/tools/staticcheck @ pinned go.sum)",
@@ -80,7 +80,7 @@ func TestStaticcheckAnalyzerCount(t *testing.T) {
 // shifts the buildir-vs-inspect split surfaces here, forcing a
 // deliberate update rather than silent drift.
 //
-// At honnef.co/go/tools v0.6.1: 50 NeedsIR=true, 45 NeedsIR=false,
+// At honnef.co/go/tools v0.8.1: 49 NeedsIR=true, 46 NeedsIR=false,
 // 95 total.
 func TestStaticcheckNeedsIRCounts(t *testing.T) {
 	yes, no := 0, 0
@@ -96,8 +96,8 @@ func TestStaticcheckNeedsIRCounts(t *testing.T) {
 		}
 	}
 	const (
-		wantYes = 50
-		wantNo  = 45
+		wantYes = 49
+		wantNo  = 46
 	)
 	if yes != wantYes {
 		t.Errorf("SA-* NeedsIR=true count = %d, want %d (update the expected counts)", yes, wantYes)

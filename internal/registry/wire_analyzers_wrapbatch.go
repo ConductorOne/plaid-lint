@@ -22,7 +22,6 @@ import (
 	godotpass "github.com/tetafro/godot"
 	promlinterpass "github.com/yeya24/promlinter"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/conductorone/plaid-lint/internal/analyzers"
 	"github.com/conductorone/plaid-lint/internal/config"
@@ -42,9 +41,9 @@ import (
 //     `pass.Report` itself (prealloc, gomoddirectives via AnalyzePass).
 //     The wrap is one closure line.
 //
-//   - []*packages.Package reconstruction: upstream takes a `*packages.Package`
-//     slice or analog, we synthesize one from `pass.Fset/Files/Pkg/TypesInfo`
-//     (gochecksumtype). Translate upstream errors back to `pass.Report`.
+//   - Native analyzer: upstream exposes an `*analysis.Analyzer`. We clone it
+//     to isolate configuration flags, then expose C1's configured linter name
+//     (gochecksumtype).
 //
 //   - Library-only: upstream exposes a per-file or per-input library that
 //     returns `[]Issue` with `token.Position`. We loop over `pass.Files`,
@@ -83,39 +82,20 @@ func wireAnalyzerFnsWrapBatch(c *catalog) {
 	})
 
 	wireNativeFn(c, "gochecksumtype", func(cfg any) []*analysis.Analyzer {
-		// []*packages.Package reconstruction shape. We synthesize a single
-		// packages.Package per pass from the pass's Fset/Files/Pkg/TypesInfo
-		// and translate gochecksumtype.Error to pass.Report.
-		var sc sumtypepass.Config
+		// v0.5 exposes a native analysis.Analyzer. Clone it before setting
+		// flags: the upstream singleton must not retain one Build's settings
+		// into another Build.
+		a := *sumtypepass.Analyzer
+		a.Name = "gochecksumtype"
 		if s, ok := cfg.(*config.GoChecksumTypeSettings); ok && s != nil {
-			sc.DefaultSignifiesExhaustive = s.DefaultSignifiesExhaustive
-			sc.IncludeSharedInterfaces = s.IncludeSharedInterfaces
+			if err := a.Flags.Set("default-signifies-exhaustive", strconv.FormatBool(s.DefaultSignifiesExhaustive)); err != nil {
+				return nil
+			}
+			if err := a.Flags.Set("include-shared-interfaces", strconv.FormatBool(s.IncludeSharedInterfaces)); err != nil {
+				return nil
+			}
 		}
-		a := &analysis.Analyzer{
-			Name: "gochecksumtype",
-			Doc:  `Run exhaustiveness checks on Go "sum types".`,
-			Run: func(pass *analysis.Pass) (any, error) {
-				pkg := &packages.Package{
-					Fset:      pass.Fset,
-					Syntax:    pass.Files,
-					Types:     pass.Pkg,
-					TypesInfo: pass.TypesInfo,
-				}
-				for _, err := range sumtypepass.Run([]*packages.Package{pkg}, sc) {
-					sterr, ok := err.(sumtypepass.Error)
-					if !ok {
-						continue
-					}
-					msg := strings.TrimPrefix(sterr.Error(), sterr.Pos().String()+": ")
-					pass.Report(analysis.Diagnostic{
-						Pos:     posFromPosition(pass, sterr.Pos()),
-						Message: msg,
-					})
-				}
-				return nil, nil
-			},
-		}
-		return []*analysis.Analyzer{a}
+		return []*analysis.Analyzer{&a}
 	})
 
 	wireNativeFn(c, "misspell", func(cfg any) []*analysis.Analyzer {

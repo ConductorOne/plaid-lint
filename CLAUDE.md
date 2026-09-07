@@ -74,7 +74,7 @@ format only the files you edited.
 ## Module + build conventions
 
 - Module path: `github.com/conductorone/plaid-lint`.
-- Go 1.26. Non-vendored module; `-mod=mod` defaults apply.
+- Go 1.27.0. Non-vendored module; `-mod=mod` defaults apply.
 - Build tags used by plaid-lint code (excluding the gopls fork):
   - `//go:build h3` — `internal/bench/h3_investigation_test.go`, an
     opt-in investigation test not run by default.

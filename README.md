@@ -101,7 +101,7 @@ plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
   "package": {
     "path": "example.com/mod/pkg/foo",
     "go_files": ["pkg/foo/a.go"],
-    "goos": "linux", "goarch": "arm64", "go_version": "1.26"
+    "goos": "linux", "goarch": "arm64", "go_version": "1.27"
   },
   "deps": {
     "importcfg": "foo.importcfg",
