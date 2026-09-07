@@ -95,6 +95,7 @@ go_library(
         "@org_golang_x_mod//module",
         "@org_golang_x_sync//errgroup",
         "@org_golang_x_tools//go/analysis",
+        "@org_golang_x_tools//go/analysis/passes/ctrlflow",
         "@org_golang_x_tools//go/ast/astutil",
         "@org_golang_x_tools//go/packages",
     ],

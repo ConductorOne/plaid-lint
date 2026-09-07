@@ -34,6 +34,7 @@ go_library(
 go_test(
     name = "unit_test",
     srcs = [
+        "collect_test.go",
         "constraints_test.go",
         "driver_test.go",
         "factaudit_test.go",

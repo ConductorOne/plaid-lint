@@ -30,13 +30,13 @@ import (
 	"go/types"
 	"log"
 	"os"
-	"reflect"
 	"strconv"
 	"sync"
 
 	"honnef.co/go/tools/go/ir"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/ctrlflow"
 )
 
 // sharedBuildirEnv is the env-var name that gates M1. Default OFF.
@@ -170,12 +170,11 @@ type workspaceBuildir struct {
 	mu      sync.Mutex
 	futures map[*types.Package]*buildirFuture
 
-	// buildirAnalyzer holds the buildir analyzer pointer so we can route
-	// pass.ImportObjectFact / pass.ExportObjectFact through the right
-	// FactTypes registration. Captured from the first pass.
-	buildirAnalyzerOnce sync.Once
-	buildirAnalyzer     *analysis.Analyzer
-	noReturnFactType    reflect.Type // element type of pass.Analyzer.FactTypes[0]
+	// ctrlflows maps source packages to the control-flow analysis created for
+	// that package. Program.SetNoReturn consults it while building the shared
+	// IR, preserving buildir's per-package no-return semantics without the
+	// removed buildir fact API.
+	ctrlflows sync.Map // map[*types.Package]*ctrlflow.CFGs
 }
 
 // buildirFuture is the per-package result. Once `ready` is closed,
@@ -199,67 +198,21 @@ func getOrCreateWorkspaceBuildir(b *typeCheckBatch) *workspaceBuildir {
 	return b.sharedBuildir
 }
 
-// initProgram pins the shared Program to the batch's fset on first
-// call. The buildir analyzer's mode (ir.GlobalDebug) matches honnef's
-// per-Run constructor at internal/passes/buildir/buildir.go:57.
+// initProgram pins the shared Program to the batch's fset on first call. The
+// buildir analyzer's mode (ir.GlobalDebug) matches honnef's per-Run
+// constructor. No-return state moved from buildir facts to ctrlflow in
+// honnef.co/go/tools v0.8, so resolve it through the source package's
+// completed ctrlflow result.
 func (w *workspaceBuildir) initProgram(fset *token.FileSet) error {
 	w.initOnce.Do(func() {
 		w.prog = ir.NewProgram(fset, ir.GlobalDebug)
+		w.prog.SetNoReturn(func(fn *types.Func) bool {
+			cfg, ok := w.ctrlflows.Load(fn.Pkg())
+			return ok && cfg.(*ctrlflow.CFGs).NoReturn(fn)
+		})
 		incSharedStats(&sharedBuildirStats.Programs)
 	})
 	return w.initErr
-}
-
-// rememberBuildirAnalyzer captures the buildir analyzer pointer and
-// resolves the noReturn fact type on first dispatch. Subsequent calls
-// are no-ops.
-func (w *workspaceBuildir) rememberBuildirAnalyzer(a *analysis.Analyzer) error {
-	var err error
-	w.buildirAnalyzerOnce.Do(func() {
-		w.buildirAnalyzer = a
-		if len(a.FactTypes) == 0 {
-			err = fmt.Errorf("plaid-lint M1: buildir analyzer has no FactTypes; honnef shape changed")
-			return
-		}
-		ft := reflect.TypeOf(a.FactTypes[0])
-		if ft.Kind() != reflect.Ptr {
-			err = fmt.Errorf("plaid-lint M1: buildir FactTypes[0] is %v (kind %v), want pointer", ft, ft.Kind())
-			return
-		}
-		w.noReturnFactType = ft.Elem()
-		// Verify the Kind field exists with the right type so we can
-		// read/write it by reflection below.
-		k, ok := w.noReturnFactType.FieldByName("Kind")
-		if !ok {
-			err = fmt.Errorf("plaid-lint M1: noReturn fact has no Kind field; honnef shape changed")
-			return
-		}
-		if want := reflect.TypeOf(ir.NoReturn(0)); k.Type != want {
-			err = fmt.Errorf("plaid-lint M1: noReturn.Kind type is %v, want %v", k.Type, want)
-			return
-		}
-
-		// Pin the *buildir.IR struct shape now that we have the
-		// Analyzer pointer.
-		initBuildirIRShape(a.ResultType)
-	})
-	return err
-}
-
-// newNoReturnFactPtr allocates a fresh *noReturn fact (typed as
-// analysis.Fact) via reflection.
-func (w *workspaceBuildir) newNoReturnFactPtr() analysis.Fact {
-	return reflect.New(w.noReturnFactType).Interface().(analysis.Fact)
-}
-
-// noReturnKind reads the Kind field from a *noReturn fact pointer.
-func (w *workspaceBuildir) noReturnKind(f analysis.Fact) ir.NoReturn {
-	return reflect.ValueOf(f).Elem().FieldByName("Kind").Interface().(ir.NoReturn)
-}
-
-// setNoReturnKind writes the Kind field on a *noReturn fact pointer.
-func (w *workspaceBuildir) setNoReturnKind(f analysis.Fact, k ir.NoReturn) {
-	reflect.ValueOf(f).Elem().FieldByName("Kind").Set(reflect.ValueOf(k))
 }
 
 // future returns the buildirFuture for pkg, allocating it lazily under
@@ -289,24 +242,24 @@ func (w *workspaceBuildir) future(pkg *types.Package) (*buildirFuture, bool) {
 //
 // On cache miss for pass.Pkg, this:
 //
-//  1. recursively ensures every transitive import has been
-//     CreatePackage'd against w.prog (honnef's Build precondition);
-//  2. CreatePackage's pass.Pkg with its files+TypesInfo (under
-//     creationMu);
-//  3. calls Package.Build (idempotent via sync.Once);
-//  4. computes the AnonFuncs-extended SrcFuncs list;
-//  5. round-trips NoReturn facts: import-on-import-build, export-on-
-//     pass.Pkg-build (mirrors honnef buildir.go:71-77 + 99-103);
+//  1. registers the completed ctrlflow result for pass.Pkg;
+//  2. recursively ensures every transitive import has been CreatePackage'd
+//     against w.prog (honnef's Build precondition);
+//  3. CreatePackage's pass.Pkg with its files+TypesInfo (under creationMu);
+//  4. calls Package.Build (idempotent via sync.Once);
+//  5. computes the AnonFuncs-extended SrcFuncs list;
 //  6. caches the result and returns.
 func (w *workspaceBuildir) runShared(pass *analysis.Pass) (any, error) {
 	incSharedStats(&sharedBuildirStats.Dispatches)
 
-	if err := w.rememberBuildirAnalyzer(pass.Analyzer); err != nil {
-		return nil, err
-	}
 	if err := w.initProgram(pass.Fset); err != nil {
 		return nil, err
 	}
+	cfg, ok := pass.ResultOf[ctrlflow.Analyzer].(*ctrlflow.CFGs)
+	if !ok {
+		return nil, fmt.Errorf("plaid-lint M1: buildir ctrlflow result has type %T", pass.ResultOf[ctrlflow.Analyzer])
+	}
+	w.ctrlflows.Store(pass.Pkg, cfg)
 
 	// Build (or wait for) pass.Pkg's *ir.Package. importable=false
 	// matches honnef's buildir.go:85 for the primary package; we pass
@@ -316,23 +269,9 @@ func (w *workspaceBuildir) runShared(pass *analysis.Pass) (any, error) {
 		return nil, err
 	}
 
-	// Export NoReturn facts for source funcs of the primary package.
-	// Mirrors honnef buildir.go:99-103. ExportObjectFact must not run
-	// after the analyzer's Run returns, which is enforced by the
-	// driver replacing pass.ExportObjectFact with a panic after Run
-	// (analysis.go around line 1895). M1 runs entirely within Run, so
-	// this is safe.
-	for _, fn := range srcFuncs {
-		if fn.NoReturn > 0 {
-			obj := fn.Object()
-			if obj == nil {
-				continue
-			}
-			fact := w.newNoReturnFactPtr()
-			w.setNoReturnKind(fact, fn.NoReturn)
-			pass.ExportObjectFact(obj, fact)
-		}
-	}
+	// The v0.8 buildir analyzer delegates no-return analysis to ctrlflow.
+	// Each package's completed ctrlflow result is available through the shared
+	// Program callback installed by initProgram.
 
 	return newBuildirIR(irpkg, srcFuncs), nil
 }
@@ -371,14 +310,8 @@ func (w *workspaceBuildir) ensurePackage(pass *analysis.Pass, pkg *types.Package
 	return irpkg, srcFuncs, err
 }
 
-// buildPackage runs the actual CreatePackage + Build + SrcFuncs +
-// NoReturn-import work. Called exactly once per (workspaceBuildir, pkg)
-// from the future-cache first caller.
-//
-// Recursion: for each direct import of pkg that hasn't been built yet,
-// recurse via ensurePackage. Honnef's createAll (buildir.go:64-81) walks
-// transitive imports breadth-first; we do the same shape but go through
-// the future-cache so siblings share work.
+// buildPackage runs the actual CreatePackage + Build + SrcFuncs work. Called
+// exactly once per (workspaceBuildir, pkg) from the future-cache first caller.
 func (w *workspaceBuildir) buildPackage(pass *analysis.Pass, pkg *types.Package, importable bool, files []*ast.File, info *types.Info) (*ir.Package, []*ir.Function, error) {
 	// Recurse on direct imports first so honnef's Build precondition
 	// holds (each direct import must be in prog.packages before Build
@@ -424,26 +357,8 @@ func (w *workspaceBuildir) buildPackage(pass *analysis.Pass, pkg *types.Package,
 	irpkg.Build()
 	w.progMu.RUnlock()
 
-	// Import NoReturn facts on the exported source funcs (mirrors
-	// buildir.go:69-77). The fact set is whatever pass.ImportObjectFact
-	// can see; under the barrier this is the post-analyze-phase state
-	// for every dep, so identical to honnef's semantics.
-	for _, fn := range irpkg.Functions {
-		if !ast.IsExported(fn.Name()) {
-			continue
-		}
-		obj := fn.Object()
-		if obj == nil {
-			continue
-		}
-		fact := w.newNoReturnFactPtr()
-		if pass.ImportObjectFact(obj, fact) {
-			fn.NoReturn = w.noReturnKind(fact)
-		}
-	}
-
 	// Compute the SrcFuncs list including anonymous functions
-	// (mirrors buildir.go:90-100).
+	// (mirrors buildir.go:74-88).
 	funcs := make([]*ir.Function, len(irpkg.Functions))
 	copy(funcs, irpkg.Functions)
 	var addAnons func(f *ir.Function)
