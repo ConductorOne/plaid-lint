@@ -556,13 +556,14 @@ func TestTracecheck_NativeWired(t *testing.T) {
 	}
 }
 
-// TestCustomLinterPlugin verifies that linters.settings.custom adds a
-// registry-only entry without crashing.
+// TestCustomLinterPlugin verifies that an enabled custom plugin adds a
+// registry-only entry without emitting an informational warning.
 func TestCustomLinterPlugin(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "none"
+	cfg.Linters.Enable = []string{"tracecheck"}
 	cfg.Linters.Settings.Custom = map[string]config.CustomLinterSettings{
-		"my-private-linter": {
+		"tracecheck": {
 			Type: "module",
 		},
 	}
@@ -574,7 +575,7 @@ func TestCustomLinterPlugin(t *testing.T) {
 
 	var found bool
 	for _, r := range reg.All() {
-		if r.Name == "my-private-linter" {
+		if r.Name == "tracecheck" {
 			found = true
 			if r.Shape != ShapeRegistryOnly {
 				t.Errorf("custom plugin shape = %v, want ShapeRegistryOnly", r.Shape)
@@ -584,16 +585,27 @@ func TestCustomLinterPlugin(t *testing.T) {
 	if !found {
 		t.Error("custom plugin not in registry.All()")
 	}
-
-	// Custom plugins should emit a "loaded at engine run time" warning.
-	var sawCustom bool
-	for _, w := range warnings {
-		if strings.Contains(w.Field, "custom") {
-			sawCustom = true
-		}
+	if len(warnings) != 0 {
+		t.Errorf("custom plugin emitted warnings: %v", warnings)
 	}
-	if !sawCustom {
-		t.Errorf("no custom-plugin warning emitted; warnings=%v", warnings)
+}
+
+func TestCustomLinterPluginConfigError(t *testing.T) {
+	cfg := config.NewDefault()
+	cfg.Linters.Settings.Custom = map[string]config.CustomLinterSettings{
+		"tracecheck": {
+			Type: "module",
+			Path: "./tracecheck",
+		},
+	}
+
+	errs := config.Validate(cfg)
+	if len(errs) != 1 {
+		t.Fatalf("config.Validate errors = %v, want one", errs)
+	}
+	if got := errs[0].Error(); !strings.Contains(got, `linters.settings.custom["tracecheck"]`) ||
+		!strings.Contains(got, "path is not supported with type=module") {
+		t.Errorf("config error = %q, want custom plugin path diagnostic", got)
 	}
 }
 
