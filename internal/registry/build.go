@@ -286,8 +286,9 @@ func resolveActiveSet(cfg *config.Config, cat *catalog) (map[string]*Entry, []Wa
 		delete(active, e.Name)
 	}
 
-	// Custom plugins from linters.settings.custom. Plugin loading
-	// happens engine-side (Phase 4); the registry surfaces the slot.
+	// Custom plugins from linters.settings.custom synthesize a
+	// registry slot. Their settings are carried through to the
+	// engine-side runner.
 	for name := range cfg.Linters.Settings.Custom {
 		// Custom names live outside the catalog; synthesize an Entry
 		// scoped to this Registry's active set. Plugin Settings are
@@ -297,10 +298,6 @@ func resolveActiveSet(cfg *config.Config, cat *catalog) (map[string]*Entry, []Wa
 			Shape:   ShapeRegistryOnly,
 			InGroup: map[Group]bool{},
 		}
-		warnings = append(warnings, Warning{
-			Field:   "linters.settings.custom[" + name + "]",
-			Message: "custom plugin registered; engine loads .so / module at run time (Phase 4)",
-		})
 	}
 
 	return active, warnings
