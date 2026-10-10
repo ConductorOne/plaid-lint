@@ -1,6 +1,6 @@
 module github.com/conductorone/plaid-lint
 
-go 1.27.0
+go 1.27.2
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0
@@ -103,10 +103,10 @@ require (
 	go-simpler.org/musttag v0.14.0
 	go-simpler.org/sloglint v0.12.0
 	go.augendre.info/fatcontext v0.10.0
-	golang.org/x/mod v0.40.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/telemetry v0.0.0-20260902144106-3ef544be8421
-	golang.org/x/tools v0.49.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518
+	golang.org/x/tools v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 	honnef.co/go/tools v0.8.1
 	mvdan.cc/unparam v0.0.0-20260823230713-2fa3d841b0c8
@@ -151,7 +151,7 @@ require (
 	github.com/quasilyte/stdinfo v0.0.0-20220114132959-f7386bf02567 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260824195058-e88cd73687aa // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
