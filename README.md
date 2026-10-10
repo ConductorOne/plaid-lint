@@ -14,6 +14,12 @@ Install from source:
 go install github.com/conductorone/plaid-lint/cmd/plaid-lint@latest
 ```
 
+Source builds require Go 1.27.2 or newer. CI and release builds use the
+version in `go.mod`; the Bazel SDK pins use the same version.
+
+Unit mode supports Go 1.27 compiler export data (format v5) through
+`golang.org/x/tools` v0.50.0, including dependency types and analysis facts.
+
 Build locally:
 
 ```sh
