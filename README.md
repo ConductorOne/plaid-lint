@@ -338,6 +338,87 @@ fully cached and incremental after that):
   `facts_only`, which says the same thing by import-path prefix and applies
   globally to an invocation.
 
+### Prebuilt binary (`--@plaid_lint//bazel:binary`)
+
+By default every plaid rule and aspect runs a `plaid-lint` built from this module's
+source, which means a cold build first compiles the linter and its whole Go dependency
+closure (~150 modules) in the exec configuration. On cold caches, CI runners and remote
+build systems that analysis and compile cost dominates small lint invocations. The
+`//bazel:binary` label_flag swaps in a prebuilt executable instead:
+
+```text
+# .bazelrc
+common --@plaid_lint//bazel:binary=//tools/lint:plaid-lint
+```
+
+The flag is consumed with `cfg = "exec"`, so the target it names is configured for the
+exec platform — a `select()` inside it picks the binary for the machine the action runs
+on. A minimal setup with the release archives, digest-pinned from
+`plaid-lint_<version>_checksums.txt`:
+
+```python
+# MODULE.bazel — the version MUST match the plaid_lint source version
+# you depend on: the rules and the binary share the unit protocol.
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "plaid_lint_linux_amd64",
+    build_file_content = 'exports_files(["plaid-lint"])',
+    sha256 = "<sha256 of plaid-lint-vX-linux-amd64.tar.gz>",
+    urls = ["https://github.com/ConductorOne/plaid-lint/releases/download/vX/plaid-lint-vX-linux-amd64.tar.gz"],
+)
+
+http_archive(
+    name = "plaid_lint_linux_arm64",
+    build_file_content = 'exports_files(["plaid-lint"])',
+    sha256 = "<sha256 of plaid-lint-vX-linux-arm64.tar.gz>",
+    urls = ["https://github.com/ConductorOne/plaid-lint/releases/download/vX/plaid-lint-vX-linux-arm64.tar.gz"],
+)
+# ...and plaid-lint-vX-darwin-arm64.zip etc. for the platforms you lint on.
+```
+
+```python
+# tools/lint/BUILD.bazel
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
+
+config_setting(
+    name = "linux_amd64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:arm64"],
+)
+
+# native_binary turns the archive's file into an executable target
+# (an exported file alone is not accepted where an executable is
+# required) and sets the executable bit regardless of archive format.
+native_binary(
+    name = "plaid-lint",
+    src = select({
+        ":linux_amd64": "@plaid_lint_linux_amd64//:plaid-lint",
+        ":linux_arm64": "@plaid_lint_linux_arm64//:plaid-lint",
+    }),
+    out = "plaid-lint",
+    visibility = ["//visibility:public"],
+)
+```
+
+Notes:
+
+- **Version lock.** The release binary and the plaid_lint module (rules, aspect, unit
+  protocol) must come from the same release. Bump both together.
+- **Same outputs.** Output depends only on the binary's code, not on how it was built:
+  the e2e suite pins byte-identical suite SARIF between the source-built and a prebuilt
+  binary. The opt-in `unit --cache-dir` result cache keys on the digest of the running
+  executable's own bytes, so it stays correct for a prebuilt binary too (a different
+  binary is a different key).
+- **Graph check.** With the flag set, `bazel cquery 'somepath(<lint target>,
+  @plaid_lint//cmd/plaid-lint)'` returns nothing.
+- `plaid_lint_aspect(binary = ...)` still binds a factory-built aspect to an explicit
+  label; its default is this flag.
+
 See [examples/bazel](examples/bazel) for a complete consumer workspace — seeded
 findings, worker variant, module lint — exercised end to end by its `e2e.sh`.
 
