@@ -449,7 +449,7 @@ def _major_minor(version):
     return version
 
 def make_plaid_lint_aspect(
-        binary = Label("//cmd/plaid-lint"),
+        binary = Label("//bazel:binary"),
         config = None,
         module_path = "",
         facts_only = [],
@@ -561,7 +561,7 @@ unit-mode hermeticity contract).""",
             doc = "The .golangci.{yml,yaml,json} config file.",
         ),
         "_plaid_lint": attr.label(
-            default = Label("//cmd/plaid-lint"),
+            default = Label("//bazel:binary"),
             executable = True,
             cfg = "exec",
         ),
@@ -778,7 +778,7 @@ _SUITE_SETTING_ATTRS = {
         default = Label("//bazel:use_worker"),
     ),
     "_plaid_lint": attr.label(
-        default = Label("//cmd/plaid-lint"),
+        default = Label("//bazel:binary"),
         executable = True,
         cfg = "exec",
     ),
