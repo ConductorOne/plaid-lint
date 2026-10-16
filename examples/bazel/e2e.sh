@@ -307,11 +307,15 @@ pass "(q) all-external-test go_test lints cleanly; testfilter-keyed archive clas
 # where a leak would surface. A content change to lib.go forces a
 # fresh (non-cached) compile + PlaidLint execution — cheap, and the
 # process summary proves the action really ran rather than the
-# assertion passing vacuously against a cache hit.
+# assertion passing vacuously against a cache hit. The change carries
+# a per-run nonce: a fixed edit is itself cacheable, so a persistent
+# --disk_cache that has seen it once (CI restores one across runs)
+# would serve both actions as cache hits.
 LIB_SRC="lib/lib.go"
 cp "$LIB_SRC" "$LIB_SRC.e2e-bak"
 trap '[[ -f "$LIB_SRC.e2e-bak" ]] && mv "$LIB_SRC.e2e-bak" "$LIB_SRC"' EXIT
-printf '\n// e2e(r): content change forcing a fresh PlaidLint execution\n' >>"$LIB_SRC"
+printf '\n// e2e(r): content change forcing a fresh PlaidLint execution (%s)\n' \
+  "$(date +%s%N)-$$-$RANDOM" >>"$LIB_SRC"
 run build --config=lint --norun_validations //lib:lib
 mv "$LIB_SRC.e2e-bak" "$LIB_SRC"
 [[ "$CODE" -eq 0 ]] || fail "(r) expected report-only lint of the touched //lib:lib to succeed"
