@@ -9,11 +9,26 @@
 #   common --@plaid_lint//bazel:config=//:.golangci.yml
 #   common --@plaid_lint//bazel:module_path=example.com/mod
 #
+# //bazel:binary selects the plaid-lint executable every rule and
+# aspect in this module runs. It defaults to building //cmd/plaid-lint
+# from source; point it at a prebuilt release binary to skip compiling
+# the linter and its dependency closure (see README "Prebuilt binary").
+#
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag", "string_list_flag")
 
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["defs.bzl"])
+
+# The plaid-lint executable. Consumed with cfg = "exec", so the target
+# it names is configured for the exec platform: a select() on
+# @platforms//os and @platforms//cpu inside it picks the binary that
+# runs where the action runs. The binary must speak this module's unit
+# protocol — pin the release that matches the plaid_lint source version.
+label_flag(
+    name = "binary",
+    build_setting_default = "//cmd/plaid-lint",
+)
 
 # The workspace's .golangci.{yml,yaml,json}. The default sentinel
 # means "plaid-lint's built-in defaults".

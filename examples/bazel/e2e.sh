@@ -28,6 +28,9 @@
 #      dependency closure, report_scope = "targets" enforces only the
 #      listed roots while their dependencies keep supplying facts and
 #      types, and a report-less root is a configuration error
+#  14. --@plaid_lint//bazel:binary swaps in a prebuilt executable:
+#      the source-built //cmd/plaid-lint leaves the action graph and
+#      the suite output is byte-identical
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -304,11 +307,15 @@ pass "(q) all-external-test go_test lints cleanly; testfilter-keyed archive clas
 # where a leak would surface. A content change to lib.go forces a
 # fresh (non-cached) compile + PlaidLint execution — cheap, and the
 # process summary proves the action really ran rather than the
-# assertion passing vacuously against a cache hit.
+# assertion passing vacuously against a cache hit. The change carries
+# a per-run nonce: a fixed edit is itself cacheable, so a persistent
+# --disk_cache that has seen it once (CI restores one across runs)
+# would serve both actions as cache hits.
 LIB_SRC="lib/lib.go"
 cp "$LIB_SRC" "$LIB_SRC.e2e-bak"
 trap '[[ -f "$LIB_SRC.e2e-bak" ]] && mv "$LIB_SRC.e2e-bak" "$LIB_SRC"' EXIT
-printf '\n// e2e(r): content change forcing a fresh PlaidLint execution\n' >>"$LIB_SRC"
+printf '\n// e2e(r): content change forcing a fresh PlaidLint execution (%s)\n' \
+  "$(date +%s%N)-$$-$RANDOM" >>"$LIB_SRC"
 run build --config=lint --norun_validations //lib:lib
 mv "$LIB_SRC.e2e-bak" "$LIB_SRC"
 [[ "$CODE" -eq 0 ]] || fail "(r) expected report-only lint of the touched //lib:lib to succeed"
@@ -469,5 +476,59 @@ run test //:lint_wrapper_direct
 grep -q "contribute no reports of their own" <<<"$OUT" \
   || fail "(u) expected the report-less-root configuration error, got: $OUT"
 pass "(u) report_scope narrows enforcement to the listed roots while dependency facts still reach them"
+
+# (v) Prebuilt binary. Pointing the //bazel:binary label_flag at a
+# prebuilt executable must take the source-built //cmd/plaid-lint out
+# of the graph entirely (the point of the flag: no linter compile, no
+# linter dependency closure) while producing the same suite output.
+# The "prebuilt" binary here is a copy of the source build, staged in
+# a throwaway repository injected for these invocations only, so the
+# assertion needs no network and pins identical analyzer behavior.
+run build //:lint
+[[ "$CODE" -eq 0 ]] || fail "(v) expected the default-binary suite build to succeed"
+PREBUILT_SARIF="$(mktemp)"
+cp "$BAZEL_BIN/lint.plaid.sarif" "$PREBUILT_SARIF"
+PREBUILT_REPO="$(mktemp -d)"
+cp "$PLAID_BIN" "$PREBUILT_REPO/plaid-lint-bin"
+chmod +x "$PREBUILT_REPO/plaid-lint-bin"
+touch "$PREBUILT_REPO/REPO.bazel"
+cat >"$PREBUILT_REPO/prebuilt.bzl" <<'BZL'
+def _impl(ctx):
+    out = ctx.actions.declare_file(ctx.label.name)
+    ctx.actions.symlink(output = out, target_file = ctx.file.src, is_executable = True)
+    return [DefaultInfo(executable = out, files = depset([out]))]
+
+prebuilt_binary = rule(
+    implementation = _impl,
+    attrs = {"src": attr.label(allow_single_file = True, mandatory = True)},
+    executable = True,
+)
+BZL
+cat >"$PREBUILT_REPO/BUILD.bazel" <<'BZL'
+load(":prebuilt.bzl", "prebuilt_binary")
+
+prebuilt_binary(
+    name = "plaid-lint",
+    src = "plaid-lint-bin",
+    visibility = ["//visibility:public"],
+)
+BZL
+PREBUILT_FLAGS=(
+  "--inject_repository=plaid_prebuilt=$PREBUILT_REPO"
+  "--@plaid_lint//bazel:binary=@plaid_prebuilt//:plaid-lint"
+)
+run cquery "${PREBUILT_FLAGS[@]}" 'somepath(//:lint, @plaid_lint//cmd/plaid-lint)'
+[[ "$CODE" -eq 0 ]] || fail "(v) cquery with the prebuilt binary failed"
+grep -q "plaid-lint//cmd/plaid-lint" <<<"$OUT" \
+  && fail "(v) the source-built //cmd/plaid-lint is still in the graph with //bazel:binary overridden"
+run cquery "${PREBUILT_FLAGS[@]}" 'somepath(//:lint, @plaid_prebuilt//:plaid-lint)'
+grep -q "@plaid_prebuilt//:plaid-lint" <<<"$OUT" \
+  || fail "(v) expected //:lint to reach the prebuilt binary"
+run build "${PREBUILT_FLAGS[@]}" //:lint
+[[ "$CODE" -eq 0 ]] || fail "(v) expected the prebuilt-binary suite build to succeed"
+cmp -s "$BAZEL_BIN/lint.plaid.sarif" "$PREBUILT_SARIF" \
+  || fail "(v) the prebuilt-binary suite SARIF differs from the source-built one"
+rm -rf "$PREBUILT_REPO" "$PREBUILT_SARIF"
+pass "(v) //bazel:binary swaps in a prebuilt executable with identical output and no source build"
 
 echo "OK: all e2e assertions passed"
