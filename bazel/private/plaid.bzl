@@ -76,8 +76,15 @@ def _pkg_key(data):
     deep export data self-describes."""
     return data.importmap or data.importpath
 
-def _is_external(target):
-    return target.label.workspace_root.startswith("external/")
+def _is_external(target, match_paths, module_path):
+    if not target.label.workspace_root.startswith("external/"):
+        return False
+
+    # Bazel roots the main repository at "", but other Bazel-compatible
+    # clients (e.g. Bonanza) give the root module a canonical name like
+    # "c1+", placing its packages under external/ too. A package inside
+    # the configured module path belongs to the main module regardless.
+    return not (module_path and _matches_prefix_any(match_paths, [module_path]))
 
 def _is_vendored(target):
     package = target.label.package
@@ -93,6 +100,9 @@ def _matches_prefix(importpath, prefixes):
         if importpath == p or importpath.startswith(p if p.endswith("/") else p + "/"):
             return True
     return False
+
+def _matches_prefix_any(importpaths, prefixes):
+    return any([_matches_prefix(p, prefixes) for p in importpaths])
 
 def _resource_set(_os_name, inputs_size):
     """Coarse memory tiers by declared-input count. The input count is
@@ -321,7 +331,7 @@ def _lint_archive(env, target, archive, base_name, by_key):
             if env.module_path:
                 match_paths.append(env.module_path + "/" + pkg_dir)
     mode = "full"
-    if _is_external(target) or _is_vendored(target) or any([_matches_prefix(p, env.facts_only) for p in match_paths]):
+    if _is_external(target, match_paths, env.module_path) or _is_vendored(target) or _matches_prefix_any(match_paths, env.facts_only):
         mode = "facts_only"
     if not any([s.is_source for s in srcs]):
         mode = "facts_only"
