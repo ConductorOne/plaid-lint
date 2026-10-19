@@ -308,7 +308,9 @@ pass "(q) all-external-test go_test lints cleanly; testfilter-keyed archive clas
 LIB_SRC="lib/lib.go"
 cp "$LIB_SRC" "$LIB_SRC.e2e-bak"
 trap '[[ -f "$LIB_SRC.e2e-bak" ]] && mv "$LIB_SRC.e2e-bak" "$LIB_SRC"' EXIT
-printf '\n// e2e(r): content change forcing a fresh PlaidLint execution\n' >>"$LIB_SRC"
+# The comment is unique per run: CI restores a disk cache across runs, so
+# a fixed edit would be a cache hit after the first run that recorded it.
+printf '\n// e2e(r): content change forcing a fresh PlaidLint execution %s-%s\n' "$(date +%s%N)" "$$" >>"$LIB_SRC"
 run build --config=lint --norun_validations //lib:lib
 mv "$LIB_SRC.e2e-bak" "$LIB_SRC"
 [[ "$CODE" -eq 0 ]] || fail "(r) expected report-only lint of the touched //lib:lib to succeed"
