@@ -13,7 +13,7 @@ bazel_dep(name = "bazel_skylib", version = "1.8.2")
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 
 # Keep the hermetic SDK aligned with the compiler used by CI and releases.
-go_sdk.download(version = "1.27.2")
+go_sdk.download(version = "1.27.3")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
