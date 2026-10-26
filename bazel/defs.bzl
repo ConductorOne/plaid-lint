@@ -61,7 +61,7 @@ PlaidReportInfo = _PlaidReportInfo
 plaid_module_lint = _plaid_module_lint
 
 def plaid_lint_aspect(
-        binary = Label("@plaid_lint//cmd/plaid-lint"),
+        binary = Label("@plaid_lint//bazel:binary"),
         config = None,
         module_path = "",
         facts_only = [],
@@ -76,9 +76,11 @@ def plaid_lint_aspect(
     at construction).
 
     Args:
-      binary: the plaid-lint executable. Defaults to building it from
+      binary: the plaid-lint executable. Defaults to the
+        @plaid_lint//bazel:binary label_flag, which builds it from
         source via rules_go — hermetic and version-locked to this
-        module. Point at a prebuilt binary target to skip that build.
+        module — unless the flag is pointed at a prebuilt binary.
+        Pass a label here to bind this aspect to a specific binary.
       config: label of the workspace's .golangci.{yml,yaml,json}. None
         applies plaid-lint's defaults.
       module_path: the Go module path, populating package module
@@ -134,6 +136,7 @@ def plaid_lint_aspect(
 #   common --@plaid_lint//bazel:module_path=example.com/mod
 #   # optional: --@plaid_lint//bazel:facts_only=example.com/mod/gen
 #   # optional: --@plaid_lint//bazel:use_worker=true
+#   # optional: --@plaid_lint//bazel:binary=//tools/lint:plaid-lint (prebuilt)
 #
 # and one BUILD target:
 #
