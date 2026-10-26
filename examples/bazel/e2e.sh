@@ -515,9 +515,14 @@ PREBUILT_FLAGS=(
   "--inject_repository=plaid_prebuilt=$PREBUILT_REPO"
   "--@plaid_lint//bazel:binary=@plaid_prebuilt//:plaid-lint"
 )
-run cquery "${PREBUILT_FLAGS[@]}" 'somepath(//:lint, @plaid_lint//cmd/plaid-lint)'
+run cquery --output=label 'somepath(//:lint, @plaid_lint//cmd/plaid-lint)'
+[[ "$CODE" -eq 0 ]] || fail "(v) default-binary cquery failed"
+SOURCE_BINARY_LABEL='^@{1,2}plaid_lint[^/]*//cmd/plaid-lint(:plaid-lint)?([[:space:]]|$)'
+grep -qE "$SOURCE_BINARY_LABEL" <<<"$OUT" \
+  || fail "(v) expected the default graph to contain the source binary"
+run cquery "${PREBUILT_FLAGS[@]}" --output=label 'somepath(//:lint, @plaid_lint//cmd/plaid-lint)'
 [[ "$CODE" -eq 0 ]] || fail "(v) cquery with the prebuilt binary failed"
-grep -q "plaid-lint//cmd/plaid-lint" <<<"$OUT" \
+grep -qE "$SOURCE_BINARY_LABEL" <<<"$OUT" \
   && fail "(v) the source-built //cmd/plaid-lint is still in the graph with //bazel:binary overridden"
 run cquery "${PREBUILT_FLAGS[@]}" 'somepath(//:lint, @plaid_prebuilt//:plaid-lint)'
 grep -q "@plaid_prebuilt//:plaid-lint" <<<"$OUT" \
@@ -526,6 +531,13 @@ run build "${PREBUILT_FLAGS[@]}" //:lint
 [[ "$CODE" -eq 0 ]] || fail "(v) expected the prebuilt-binary suite build to succeed"
 cmp -s "$BAZEL_BIN/lint.plaid.sarif" "$PREBUILT_SARIF" \
   || fail "(v) the prebuilt-binary suite SARIF differs from the source-built one"
+run test "${PREBUILT_FLAGS[@]}" //:lint_clean
+[[ "$CODE" -eq 0 ]] || fail "(v) expected the prebuilt clean suite to pass"
+run test "${PREBUILT_FLAGS[@]}" //:lint
+[[ "$CODE" -ne 0 ]] || fail "(v) expected the prebuilt finding suite to fail"
+PREBUILT_TEST_LOG="$("$BAZEL" info bazel-testlogs)/lint/test.log"
+grep -qF "FAIL — 5 enforced finding(s)" "$PREBUILT_TEST_LOG" \
+  || fail "(v) expected the same enforced findings with the prebuilt binary"
 rm -rf "$PREBUILT_REPO" "$PREBUILT_SARIF"
 pass "(v) //bazel:binary swaps in a prebuilt executable with identical output and no source build"
 
