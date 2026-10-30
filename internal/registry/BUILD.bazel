@@ -7,6 +7,7 @@ go_library(
         "cache_version.go",
         "catalog.go",
         "doc.go",
+        "fact_codecs.go",
         "propagate.go",
         "seed.go",
         "select.go",
@@ -48,6 +49,7 @@ go_library(
         "//internal/analyzers/queryscope",
         "//internal/analyzers/tracecheck",
         "//internal/config",
+        "//internal/gopls/facts",
         "@cc_mvdan_unparam//check",
         "@co_honnef_go_tools//analysis/facts/directives",
         "@co_honnef_go_tools//analysis/facts/generated",
@@ -226,6 +228,7 @@ go_test(
     name = "registry_test",
     srcs = [
         "corpus_test.go",
+        "fact_codecs_test.go",
         "iface_test.go",
         "registry_test.go",
         "select_test.go",

@@ -163,3 +163,125 @@ func TestFactsDeterminism_MultiFactDep(t *testing.T) {
 		}
 	}
 }
+
+// enumDep declares an enum, so exhaustive exports an enumMembersFact
+// for Color. That fact holds three maps; with enough members their
+// gob iteration order differs between runs unless the fact set
+// serializes them canonically. Crimson aliases Red's value so the
+// value→names map has a multi-name entry.
+const (
+	enumDep = `package dep
+
+type Color int
+
+const (
+	Red Color = iota
+	Orange
+	Yellow
+	Green
+	Blue
+	Indigo
+	Violet
+	Black
+	White
+	Grey
+	Cyan
+	Magenta
+	Crimson = Red
+)
+`
+
+	enumRoot = `package root
+
+import "example.com/fix/dep"
+
+func name(c dep.Color) string {
+	switch c {
+	case dep.Red, dep.Orange, dep.Yellow, dep.Green, dep.Blue, dep.Indigo,
+		dep.Violet, dep.Black, dep.White, dep.Grey, dep.Cyan:
+		return "known"
+	}
+	return "?"
+}
+`
+)
+
+func exhaustiveConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, _, err := config.Decode([]byte(`
+version: "2"
+linters:
+  default: none
+  enable:
+    - exhaustive
+`), ".yml")
+	if err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	return cfg
+}
+
+// TestFactsDeterminism_EnumDep pins the map-bearing exhaustive fact:
+// the enum package's .plaidfacts must be byte-identical across runs,
+// and the root's exhaustive check must still see the decoded fact
+// (the missing-case finding is only reachable through it).
+func TestFactsDeterminism_EnumDep(t *testing.T) {
+	pkgs := buildFixture(t, map[string]string{
+		"go.mod":       fixtureGoMod,
+		"dep/dep.go":   enumDep,
+		"root/root.go": enumRoot,
+	})
+	dep := pkgs["example.com/fix/dep"]
+	root := pkgs["example.com/fix/root"]
+	if dep == nil || root == nil {
+		t.Fatalf("fixture packages missing: %v", pkgs)
+	}
+
+	const runs = 8
+	var factsBlobs [runs][]byte
+	var factsPaths [runs]string
+	for i := range factsBlobs {
+		_, _, factsPath := runUnitOn(t, dep, ModeFactsOnly, nil, exhaustiveConfig(t))
+		blob, err := os.ReadFile(factsPath)
+		if err != nil {
+			t.Fatalf("run %d: dep facts missing: %v", i, err)
+		}
+		factsBlobs[i] = blob
+		factsPaths[i] = factsPath
+	}
+	payload, err := unwrapFacts(factsBlobs[0])
+	if err != nil {
+		t.Fatalf("dep facts container: %v", err)
+	}
+	if len(payload) == 0 {
+		t.Fatal("dep exported no facts; fixture must produce an exhaustive enum fact")
+	}
+	for i := 1; i < runs; i++ {
+		if !bytes.Equal(factsBlobs[0], factsBlobs[i]) {
+			t.Errorf(".plaidfacts differ between identical runs 0 and %d (%s vs %s): %d vs %d bytes",
+				i, factsPaths[0], factsPaths[i], len(factsBlobs[0]), len(factsBlobs[i]))
+		}
+	}
+
+	// Every run's facts, decoded, must drive the same finding.
+	var want []byte
+	for i, path := range factsPaths {
+		res, _, _ := runUnitOn(t, root, ModeFull, map[string]string{"example.com/fix/dep": path}, exhaustiveConfig(t))
+		if !hasFinding(res, "exhaustive", "dep.Magenta") {
+			t.Fatalf("run %d: missing exhaustive finding for dep.Magenta — enum fact did not round-trip; got %+v",
+				i, res.Diagnostics)
+		}
+		if hasFinding(res, "exhaustive", "dep.Crimson") {
+			t.Errorf("run %d: Crimson shares Red's value and must not be reported missing; got %+v", i, res.Diagnostics)
+		}
+		blob, err := json.Marshal(res.Diagnostics)
+		if err != nil {
+			t.Fatalf("run %d: marshal diagnostics: %v", i, err)
+		}
+		if i == 0 {
+			want = blob
+		} else if !bytes.Equal(want, blob) {
+			t.Errorf("root diagnostics differ between runs 0 and %d:\nrun 0: %s\nrun %d: %s", i, want, i, blob)
+		}
+	}
+}

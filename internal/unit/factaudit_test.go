@@ -16,35 +16,9 @@ import (
 	"golang.org/x/tools/go/analysis"
 
 	"github.com/conductorone/plaid-lint/internal/config"
+	"github.com/conductorone/plaid-lint/internal/gopls/facts"
 	"github.com/conductorone/plaid-lint/internal/registry"
 )
-
-// factTypeAllowlist names fact types (keyed by reflect.Type.String()
-// of the concrete FactTypes entry, pointer included) that the audit
-// tolerates despite containing map- or interface-kinded payload
-// fields. Facts are gob-encoded into .plaidfacts; gob iterates maps
-// in random order and encodes interfaces by dynamic type, so any
-// entry here is a latent nondeterminism (cache-poisoning) hazard and
-// MUST carry a TODO explaining why it is tolerated and how it will
-// be fixed.
-// Every entry is also printed prominently on each test run so the
-// debt stays visible; the audit still hard-fails on any NEW offender.
-var factTypeAllowlist = map[string]string{
-	// TODO(plaid-lint/unit-mode): contextcheck's fact type is itself a
-	// map (kkHAIKE/contextcheck: `type ctxFact map[string]...`), so its
-	// gob bytes vary run-to-run whenever contextcheck exports a
-	// non-empty fact. Cross-package .plaidfacts containing it are NOT
-	// byte-reproducible → cache-key instability in distributed builds.
-	// Fix: canonicalize at export (fork the fact type to a sorted
-	// slice), or strip contextcheck facts from the exported set.
-	"*contextcheck.ctxFact": "upstream map-typed fact; needs canonical encoding before facts export",
-
-	// TODO(plaid-lint/unit-mode): exhaustive's enumMembersFact carries
-	// three map fields (Members.NameToPos / NameToValue / ValueToNames)
-	// — same nondeterministic-gob hazard as contextcheck above, same
-	// fix options (canonicalize on export or strip from .plaidfacts).
-	"*exhaustive.enumMembersFact": "upstream fact with map fields; needs canonical encoding before facts export",
-}
 
 // gobEncoderType / binaryMarshalerType: a type implementing either
 // interface is encoded by its own method, not by gob's reflective
@@ -67,7 +41,10 @@ var (
 // recurse over exported fields only (gob never encodes unexported
 // fields), slices/arrays recurse into the element type, and types
 // implementing gob.GobEncoder / encoding.BinaryMarshaler are opaque
-// leaves.
+// leaves. A fact type with a registered wire codec
+// (facts.RegisterWireCodec) is audited as its wire type, which is
+// what actually reaches gob. There is no allowlist: an offender must
+// be fixed before it ships.
 func TestFactTypes_AuditDeterministicEncoding(t *testing.T) {
 	cfg := config.NewDefault()
 	cfg.Linters.Default = "all"
@@ -122,7 +99,13 @@ func TestFactTypes_AuditDeterministicEncoding(t *testing.T) {
 			ft := reflect.TypeOf(f)
 			e, ok := audited[ft]
 			if !ok {
-				e = &auditEntry{offenders: auditFactType(ft)}
+				// A fact type with a registered wire codec is
+				// serialized as its wire type, so audit that.
+				wt := ft
+				if w, ok := facts.WireType(ft); ok {
+					wt = w
+				}
+				e = &auditEntry{offenders: auditFactType(wt)}
 				audited[ft] = e
 			}
 			e.declaredBy = append(e.declaredBy, a.Name)
@@ -147,11 +130,7 @@ func TestFactTypes_AuditDeterministicEncoding(t *testing.T) {
 		sort.Strings(e.declaredBy)
 		report := fmt.Sprintf("fact type %s (declared by %s) has nondeterministically gob-encoded fields:\n  %s",
 			ft, strings.Join(dedup(e.declaredBy), ", "), strings.Join(e.offenders, "\n  "))
-		if reason, ok := factTypeAllowlist[ft.String()]; ok {
-			t.Logf("ALLOWLISTED OFFENDER — %s\n  allowlist reason: %s", report, reason)
-			continue
-		}
-		t.Errorf("%s\neither fix the fact type or allowlist it in factTypeAllowlist with a TODO", report)
+		t.Errorf("%s\nregister a deterministic wire codec for it (see internal/registry/fact_codecs.go)", report)
 	}
 }
 

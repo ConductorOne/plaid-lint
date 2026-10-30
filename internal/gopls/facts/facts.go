@@ -39,3 +39,13 @@ type GetPackageFunc = facts.GetPackageFunc
 // package lookups go through getPackage rather than an eagerly
 // computed transitive import map.
 var NewDecoderFunc = facts.NewDecoderFunc
+
+// WireCodec gives a fact type a deterministic serialized form. See
+// the forked package's docs.
+type WireCodec = facts.WireCodec
+
+// RegisterWireCodec installs a WireCodec for one fact type.
+var RegisterWireCodec = facts.RegisterWireCodec
+
+// WireType reports the wire type registered for a fact type, if any.
+var WireType = facts.WireType

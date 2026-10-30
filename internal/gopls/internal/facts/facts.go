@@ -280,7 +280,10 @@ func (d *Decoder) DecodeFromGobFacts(read func(pkgPath string) (GobFacts, error)
 				logf("no package %q; discarding %v", f.PkgPath, f.Fact)
 				continue
 			}
-			key := key{pkg: factPkg, t: reflect.TypeOf(f.Fact)}
+			// gf.facts may be shared across decoders; convert a
+			// wire value into a fresh fact rather than in place.
+			fact := fromWire(f.Fact)
+			key := key{pkg: factPkg, t: reflect.TypeOf(fact)}
 			if f.Object != "" {
 				// object fact
 				obj, err := objectpath.Object(factPkg, f.Object)
@@ -291,12 +294,12 @@ func (d *Decoder) DecodeFromGobFacts(read func(pkgPath string) (GobFacts, error)
 					continue
 				}
 				key.obj = obj
-				logf("read %T fact %s for %v", f.Fact, f.Fact, key.obj)
+				logf("read %T fact %s for %v", fact, fact, key.obj)
 			} else {
 				// package fact
-				logf("read %T fact %s for %v", f.Fact, f.Fact, factPkg)
+				logf("read %T fact %s for %v", fact, fact, factPkg)
 			}
-			m[key] = f.Fact
+			m[key] = fact
 		}
 	}
 
@@ -398,7 +401,7 @@ func (s *Set) encode() ([]byte, []gobFact) {
 		gobFacts = append(gobFacts, gobFact{
 			PkgPath: k.pkg.Path(),
 			Object:  object,
-			Fact:    fact,
+			Fact:    toWire(fact), // map-free form for registered types; see codec.go
 		})
 	}
 	s.mu.Unlock()
