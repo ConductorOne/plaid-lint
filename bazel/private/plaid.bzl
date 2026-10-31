@@ -707,13 +707,27 @@ def _suite_test_impl(ctx):
 
     # The test runner prints the report and gates on the verdict's
     # enforced count. Runfiles resolve via $TEST_SRCDIR (bazel test)
-    # with a $0.runfiles fallback (bazel run).
+    # with a $0.runfiles fallback (bazel run). The main repo's runfiles
+    # directory is ctx.workspace_name ("_main") under Bazel, but some
+    # Bazel-compatible clients name it after the root module's canonical
+    # repo name, so try both, then any directory holding the report.
     runner = ctx.actions.declare_file(ctx.label.name + ".plaid-runner.sh")
     ctx.actions.write(
         runner,
         """#!/usr/bin/env bash
 set -euo pipefail
-RUNFILES="${{TEST_SRCDIR:-$0.runfiles}}/{workspace}"
+ROOT="${{TEST_SRCDIR:-$0.runfiles}}"
+RUNFILES=""
+for d in "$ROOT/{workspace}" "$ROOT/{repo}" "$ROOT"/*; do
+  if [[ -f "$d/{report}" ]]; then
+    RUNFILES="$d"
+    break
+  fi
+done
+if [[ -z "$RUNFILES" ]]; then
+  echo "plaid-lint suite: cannot find {report} in any runfiles directory under $ROOT" >&2
+  exit 2
+fi
 REPORT="$RUNFILES/{report}"
 VERDICT="$RUNFILES/{verdict}"
 cat "$REPORT"
@@ -729,6 +743,7 @@ fi
 echo "plaid-lint suite: clean"
 """.format(
             workspace = ctx.workspace_name,
+            repo = ctx.label.repo_name,
             report = report_txt.short_path,
             verdict = verdict.short_path,
         ),
