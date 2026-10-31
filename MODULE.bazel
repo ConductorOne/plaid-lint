@@ -10,9 +10,10 @@ bazel_dep(name = "rules_go", version = "0.62.0")
 bazel_dep(name = "gazelle", version = "0.52.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
-go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
-
 # Keep the hermetic SDK aligned with the compiler used by CI and releases.
+# dev_dependency: the SDK applies only when plaid_lint is the root module;
+# dependent modules choose their own Go SDK.
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
 go_sdk.download(version = "1.27.3")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
