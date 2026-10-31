@@ -7,7 +7,9 @@ package facts
 import (
 	"encoding/gob"
 	"fmt"
+	"io"
 	"reflect"
+	"sort"
 	"sync"
 
 	"golang.org/x/tools/go/analysis"
@@ -98,4 +100,66 @@ func fromWire(fact analysis.Fact) analysis.Fact {
 		return fact
 	}
 	return e.codec.FromWire(fact)
+}
+
+// PinTypeIDs assigns gob type ids to the fact envelope and to every
+// type in factTypes (or its registered wire type), in a fixed order.
+//
+// gob numbers types process-wide, in the order an encoder first sees
+// them, and writes those numbers into every stream. Without pinning,
+// a long-lived process (a persistent worker) encodes the same fact
+// set to different bytes depending on which fact types it happened to
+// encode for earlier packages. Calling PinTypeIDs with the complete
+// set of fact types before the first Set.Encode makes the numbering
+// a function of that set alone. Decoding never assigns ids, so only
+// encoders have to come after it.
+//
+// Types that already have ids keep them; types encoded later that are
+// absent from factTypes still get history-dependent ids.
+func PinTypeIDs(factTypes []reflect.Type) {
+	types := make([]reflect.Type, 0, len(factTypes))
+	seen := map[reflect.Type]bool{}
+	for _, ft := range factTypes {
+		if wt, ok := WireType(ft); ok {
+			ft = wt
+		}
+		if !seen[ft] {
+			seen[ft] = true
+			types = append(types, ft)
+		}
+	}
+	sort.Slice(types, func(i, j int) bool { return typeKey(types[i]) < typeKey(types[j]) })
+
+	// The envelope first: every fact blob begins with its definition.
+	pinTypeID([]gobFact{})
+	for _, t := range types {
+		if t.Kind() == reflect.Pointer {
+			pinTypeID(reflect.New(t.Elem()).Interface())
+		} else {
+			pinTypeID(reflect.Zero(t).Interface())
+		}
+	}
+}
+
+// pinTypeID encodes v to nowhere. The encoder assigns v's type (and
+// the types it contains) an id before it encodes the value, so an
+// encode error or a panicking GobEncode on a zero value still pins.
+func pinTypeID(v any) {
+	defer func() { _ = recover() }()
+	_ = gob.NewEncoder(io.Discard).Encode(v)
+}
+
+// typeKey orders types by package path and name, which unlike
+// reflect.Type.String is unique across packages that share a name.
+func typeKey(t reflect.Type) string {
+	n := t
+	prefix := ""
+	for n.Kind() == reflect.Pointer && n.Name() == "" {
+		prefix += "*"
+		n = n.Elem()
+	}
+	if n.Name() == "" {
+		return prefix + t.String()
+	}
+	return prefix + n.PkgPath() + "." + n.Name()
 }

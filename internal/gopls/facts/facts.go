@@ -49,3 +49,8 @@ var RegisterWireCodec = facts.RegisterWireCodec
 
 // WireType reports the wire type registered for a fact type, if any.
 var WireType = facts.WireType
+
+// PinTypeIDs fixes the gob type ids of the given fact types so that
+// fact encoding does not depend on process history. See the forked
+// package's docs.
+var PinTypeIDs = facts.PinTypeIDs

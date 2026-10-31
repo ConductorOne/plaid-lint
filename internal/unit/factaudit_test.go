@@ -181,6 +181,88 @@ func auditWalk(rt reflect.Type, path string, inProgress map[reflect.Type]bool, o
 	}
 }
 
+// TestFactTypes_PinnedTypesHaveNoInterfaces guards pinFactTypeIDs:
+// pinning encodes a zero value of each fact (or wire) type, which
+// assigns gob ids to every type reachable through its fields but not
+// to concrete types hidden behind an interface. Such a type would get
+// its id on first use, so its encoding would again depend on process
+// history. Walks exactly the set pinFactTypeIDs pins.
+func TestFactTypes_PinnedTypesHaveNoInterfaces(t *testing.T) {
+	cfg := config.NewDefault()
+	cfg.Linters.Default = "all"
+	cfg.Linters.Settings.Govet.EnableAll = true
+	reg, _, err := registry.BuildFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("registry.BuildFromConfig: %v", err)
+	}
+	var roots []*analysis.Analyzer
+	for _, r := range reg.All() {
+		if r.Analyzer != nil {
+			roots = append(roots, r.Analyzer)
+		}
+	}
+	// The walker must see interfaces behind pointers, slices and map keys.
+	type probe struct {
+		M map[any]int
+		S []*struct{ X any }
+	}
+	var probeHits []string
+	interfaceWalk(reflect.TypeOf(&probe{}), "probe", map[reflect.Type]bool{}, &probeHits)
+	if len(probeHits) != 2 {
+		t.Fatalf("interfaceWalk found %v in probe, want the map key and the nested field", probeHits)
+	}
+
+	types := factTypesOf(roots)
+	if len(types) == 0 {
+		t.Fatal("no fact types in the catalog; guard is vacuous")
+	}
+	var offenders []string
+	for _, ft := range types {
+		if wt, ok := facts.WireType(ft); ok {
+			ft = wt
+		}
+		interfaceWalk(ft, ft.String(), map[reflect.Type]bool{}, &offenders)
+	}
+	sort.Strings(offenders)
+	for _, o := range dedup(offenders) {
+		t.Errorf("%s: interface-typed value; its concrete types are not pinned by PinTypeIDs (pin them explicitly or register a wire codec)", o)
+	}
+	t.Logf("checked %d pinned fact types", len(types))
+}
+
+// interfaceWalk records every path from rt to an interface kind,
+// through pointers, struct fields, slice/array elements and map keys
+// and values. Custom gob/binary encoders are opaque leaves.
+func interfaceWalk(rt reflect.Type, path string, inProgress map[reflect.Type]bool, out *[]string) {
+	if rt.Implements(gobEncoderType) || rt.Implements(binaryMarshalerType) ||
+		(rt.Kind() != reflect.Pointer &&
+			(reflect.PointerTo(rt).Implements(gobEncoderType) || reflect.PointerTo(rt).Implements(binaryMarshalerType))) {
+		return
+	}
+	switch rt.Kind() {
+	case reflect.Interface:
+		*out = append(*out, fmt.Sprintf("%s (%s)", path, rt))
+	case reflect.Pointer:
+		interfaceWalk(rt.Elem(), path, inProgress, out)
+	case reflect.Slice, reflect.Array:
+		interfaceWalk(rt.Elem(), path+"[]", inProgress, out)
+	case reflect.Map:
+		interfaceWalk(rt.Key(), path+"[key]", inProgress, out)
+		interfaceWalk(rt.Elem(), path+"[value]", inProgress, out)
+	case reflect.Struct:
+		if inProgress[rt] {
+			return
+		}
+		inProgress[rt] = true
+		for i := range rt.NumField() {
+			if f := rt.Field(i); f.IsExported() {
+				interfaceWalk(f.Type, path+"."+f.Name, inProgress, out)
+			}
+		}
+		delete(inProgress, rt)
+	}
+}
+
 // dedup collapses adjacent duplicates in a sorted slice.
 func dedup(s []string) []string {
 	out := s[:0]
