@@ -20,9 +20,11 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/analysis"
 
+	"github.com/conductorone/plaid-lint/internal/config"
 	"github.com/conductorone/plaid-lint/internal/gopls/driverutil"
 	"github.com/conductorone/plaid-lint/internal/gopls/facts"
 	"github.com/conductorone/plaid-lint/internal/output"
+	"github.com/conductorone/plaid-lint/internal/registry"
 )
 
 // analyzerEntry pairs a registry linter name with one of its
@@ -92,6 +94,7 @@ func runAnalyzers(ctx context.Context, cfg *Config, cp *checkedPackage, roots []
 	// (unitchecker does the same at startup). Registration is
 	// process-global and idempotent for identical types.
 	registerFactTypes(uniqueRoots)
+	pinFactTypeIDs()
 
 	factSet, err := decodeDepFacts(cfg, cp)
 	if err != nil {
@@ -348,6 +351,65 @@ var (
 	factTypesMu         sync.Mutex
 	factTypesRegistered = map[reflect.Type]bool{}
 )
+
+var pinFactTypeIDsOnce sync.Once
+
+// pinFactTypeIDs fixes the gob type id of every fact type any catalog
+// analyzer can produce, once per process and before the first fact
+// encode. gob writes process-global type ids into each .plaidfacts
+// blob, so without this a persistent worker's output for a package
+// depends on which packages (and fact types) it encoded before.
+// Pinning the whole catalog, not just this request's analyzers, keeps
+// the ids independent of the configuration and mode of earlier
+// requests too.
+func pinFactTypeIDs() {
+	pinFactTypeIDsOnce.Do(func() {
+		cfg := config.NewDefault()
+		cfg.Linters.Default = "all"
+		cfg.Linters.Settings.Govet.EnableAll = true
+		reg, _, err := registry.BuildFromConfig(cfg)
+		if err != nil {
+			// Unreachable with the default config; without pinning,
+			// ids fall back to first-use order.
+			return
+		}
+		var roots []*analysis.Analyzer
+		for _, r := range reg.All() {
+			if r.Analyzer != nil {
+				roots = append(roots, r.Analyzer)
+			}
+		}
+		facts.PinTypeIDs(factTypesOf(roots))
+	})
+}
+
+// factTypesOf returns the distinct fact types declared by roots and
+// their transitive Requires closure.
+func factTypesOf(roots []*analysis.Analyzer) []reflect.Type {
+	var out []reflect.Type
+	seenType := map[reflect.Type]bool{}
+	seen := map[*analysis.Analyzer]bool{}
+	var walk func(a *analysis.Analyzer)
+	walk = func(a *analysis.Analyzer) {
+		if seen[a] {
+			return
+		}
+		seen[a] = true
+		for _, f := range a.FactTypes {
+			if t := reflect.TypeOf(f); !seenType[t] {
+				seenType[t] = true
+				out = append(out, t)
+			}
+		}
+		for _, req := range a.Requires {
+			walk(req)
+		}
+	}
+	for _, a := range roots {
+		walk(a)
+	}
+	return out
+}
 
 // registerFactTypes gob-registers the fact types of every analyzer
 // reachable from roots through Requires edges.

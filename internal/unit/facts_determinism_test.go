@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/conductorone/plaid-lint/internal/config"
@@ -283,5 +285,78 @@ func TestFactsDeterminism_EnumDep(t *testing.T) {
 		} else if !bytes.Equal(want, blob) {
 			t.Errorf("root diagnostics differ between runs 0 and %d:\nrun 0: %s\nrun %d: %s", i, want, i, blob)
 		}
+	}
+}
+
+// historyChildEnv selects the child half of
+// TestFactsDeterminism_ProcessHistory: "fresh" or "warm", with the
+// facts output copied to historyOutEnv.
+const (
+	historyChildEnv = "PLAID_LINT_FACTS_HISTORY_CHILD"
+	historyOutEnv   = "PLAID_LINT_FACTS_HISTORY_OUT"
+)
+
+// TestFactsDeterminism_ProcessHistory: a package's .plaidfacts must
+// not depend on what the process encoded before it. gob numbers types
+// process-wide in first-use order, so a persistent worker that first
+// encoded another package's facts (here: an exhaustive enum fact)
+// would otherwise number the purity/printf/deprecation fact types
+// differently from a fresh process. Each half runs in its own child
+// process, since gob's type numbering cannot be reset in-process.
+func TestFactsDeterminism_ProcessHistory(t *testing.T) {
+	if mode := os.Getenv(historyChildEnv); mode != "" {
+		runHistoryChild(t, mode)
+		return
+	}
+
+	run := func(mode string) []byte {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), mode+".plaidfacts")
+		cmd := exec.Command(os.Args[0], "-test.run=^TestFactsDeterminism_ProcessHistory$", "-test.count=1")
+		cmd.Env = append(os.Environ(), historyChildEnv+"="+mode, historyOutEnv+"="+out)
+		if b, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s child: %v\n%s", mode, err, b)
+		}
+		blob, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatalf("%s child wrote no facts: %v", mode, err)
+		}
+		return blob
+	}
+	fresh, warm := run("fresh"), run("warm")
+	if !bytes.Equal(fresh, warm) {
+		t.Errorf(".plaidfacts depend on process history: fresh process %d bytes, after another package %d bytes\nfresh: %x\nwarm:  %x",
+			len(fresh), len(warm), fresh, warm)
+	}
+}
+
+func runHistoryChild(t *testing.T, mode string) {
+	pkgs := buildFixture(t, map[string]string{
+		"go.mod":       fixtureGoMod,
+		"dep/dep.go":   multiFactDep,
+		"enum/enum.go": enumDep,
+		"root/root.go": "package root\n",
+	})
+	if mode == "warm" {
+		enum := pkgs["example.com/fix/enum"]
+		if enum == nil {
+			t.Fatalf("fixture package enum missing: %v", pkgs)
+		}
+		_, _, enumFacts := runUnitOn(t, enum, ModeFactsOnly, nil, exhaustiveConfig(t))
+		if blob, err := os.ReadFile(enumFacts); err != nil || len(blob) <= len(factsMagic) {
+			t.Fatalf("warm-up package exported no facts (err=%v)", err)
+		}
+	}
+	dep := pkgs["example.com/fix/dep"]
+	if dep == nil {
+		t.Fatalf("fixture package dep missing: %v", pkgs)
+	}
+	_, _, factsPath := runUnitOn(t, dep, ModeFactsOnly, nil, multiFactConfig(t))
+	blob, err := os.ReadFile(factsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(os.Getenv(historyOutEnv), blob, 0o666); err != nil {
+		t.Fatal(err)
 	}
 }
