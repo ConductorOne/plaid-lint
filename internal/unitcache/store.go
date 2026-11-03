@@ -16,10 +16,12 @@ import (
 )
 
 // Outputs names the declared outputs of one unit action. Facts is
-// empty for actions that declare none (mode=module).
+// empty for actions that declare none (mode=module); Export is empty
+// unless the action declares out.export.
 type Outputs struct {
-	Sarif string
-	Facts string
+	Sarif  string
+	Facts  string
+	Export string
 }
 
 // Entry is everything a unit action observably produces: the bytes of
@@ -39,16 +41,18 @@ type Outputs struct {
 // cached: an action whose inputs were unusable is an infrastructure
 // failure, and replaying one would hide a real problem.
 type Entry struct {
-	Sarif    []byte
-	Facts    []byte
-	HasFacts bool
-	Warnings []string
+	Sarif     []byte
+	Facts     []byte
+	HasFacts  bool
+	Export    []byte
+	HasExport bool
+	Warnings  []string
 }
 
 // entryMagic prefixes every serialized entry: "PLUC" (plaid-lint unit
 // cache) plus one format version byte. Readers reject anything else,
 // so a format change is a clean miss rather than a misparse.
-var entryMagic = []byte{'P', 'L', 'U', 'C', 0x01}
+var entryMagic = []byte{'P', 'L', 'U', 'C', 0x02}
 
 // Store is a content-addressed directory of entries. It is safe for
 // concurrent use across goroutines and processes: writes publish
@@ -148,18 +152,28 @@ func ReadOutputs(out Outputs, warnings []string) (*Entry, error) {
 		}
 		e.Facts, e.HasFacts = facts, true
 	}
+	if out.Export != "" {
+		export, err := os.ReadFile(out.Export)
+		if err != nil {
+			return nil, fmt.Errorf("unitcache: read export output: %w", err)
+		}
+		e.Export, e.HasExport = export, true
+	}
 	return e, nil
 }
 
 // Write materializes a cached entry as the action's declared outputs.
 //
-// An entry that does not carry facts cannot satisfy an action that
-// declares a facts output (and vice versa): rather than leave a
-// declared output missing, that mismatch is an error and the caller
-// falls back to a cold run.
+// An entry that does not carry facts (or export data) cannot satisfy
+// an action that declares that output (and vice versa): rather than
+// leave a declared output missing, that mismatch is an error and the
+// caller falls back to a cold run.
 func (e *Entry) Write(out Outputs) error {
 	if (out.Facts != "") != e.HasFacts {
 		return fmt.Errorf("unitcache: entry facts presence (%t) does not match the action's declared outputs", e.HasFacts)
+	}
+	if (out.Export != "") != e.HasExport {
+		return fmt.Errorf("unitcache: entry export presence (%t) does not match the action's declared outputs", e.HasExport)
 	}
 	if err := writeFileAtomic(out.Sarif, e.Sarif); err != nil {
 		return fmt.Errorf("unitcache: write sarif output: %w", err)
@@ -169,12 +183,17 @@ func (e *Entry) Write(out Outputs) error {
 			return fmt.Errorf("unitcache: write facts output: %w", err)
 		}
 	}
+	if out.Export != "" {
+		if err := writeFileAtomic(out.Export, e.Export); err != nil {
+			return fmt.Errorf("unitcache: write export output: %w", err)
+		}
+	}
 	return nil
 }
 
 // encodeEntry serializes an entry:
 //
-//	magic | key | nWarnings | (len, bytes)* | hasFacts | sarif | facts | sha256
+//	magic | key | nWarnings | (len, bytes)* | hasFacts | hasExport | sarif | facts | export | sha256
 //
 // The key is stored inside the entry and checked on read so a
 // misfiled or hand-edited entry is rejected rather than served under
@@ -193,8 +212,14 @@ func encodeEntry(k Key, e *Entry) []byte {
 		hasFacts = 1
 	}
 	b.WriteByte(hasFacts)
+	var hasExport byte
+	if e.HasExport {
+		hasExport = 1
+	}
+	b.WriteByte(hasExport)
 	writeBytes(&b, e.Sarif)
 	writeBytes(&b, e.Facts)
+	writeBytes(&b, e.Export)
 	sum := sha256.Sum256(b.Bytes())
 	b.Write(sum[:])
 	return b.Bytes()
@@ -235,14 +260,17 @@ func decodeEntry(k Key, body []byte) (*Entry, error) {
 		}
 		e.Warnings = append(e.Warnings, string(w))
 	}
-	if len(r) < 1 {
+	if len(r) < 2 {
 		return nil, fmt.Errorf("unitcache: entry %s: truncated body", k)
 	}
-	e.HasFacts, r = r[0] == 1, r[1:]
+	e.HasFacts, e.HasExport, r = r[0] == 1, r[1] == 1, r[2:]
 	if e.Sarif, r, err = readBytes(r); err != nil {
 		return nil, fmt.Errorf("unitcache: entry %s: %w", k, err)
 	}
 	if e.Facts, r, err = readBytes(r); err != nil {
+		return nil, fmt.Errorf("unitcache: entry %s: %w", k, err)
+	}
+	if e.Export, r, err = readBytes(r); err != nil {
 		return nil, fmt.Errorf("unitcache: entry %s: %w", k, err)
 	}
 	if len(r) != 0 {

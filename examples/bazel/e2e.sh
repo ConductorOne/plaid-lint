@@ -397,6 +397,8 @@ import json, sys
 cfg = json.load(open(sys.argv[1]))
 cfg["out"]["sarif"] = sys.argv[3] + "/out.sarif"
 cfg["out"]["facts"] = sys.argv[3] + "/out.plaidfacts"
+if "export" in cfg["out"]:
+    cfg["out"]["export"] = sys.argv[3] + "/out.plaidexport"
 json.dump(cfg, open(sys.argv[2], "w"))
 PY
 
@@ -409,7 +411,7 @@ cmp -s "$UNIT_OUT/out.sarif" "$BAZEL_BIN/lib/lib.plaid.sarif" \
 [[ "$(cache_entries "$CACHE_DIR")" == "1" ]] \
   || fail "(t) expected exactly one cache entry after the cold run, got $(cache_entries "$CACHE_DIR")"
 
-rm -f "$UNIT_OUT/out.sarif" "$UNIT_OUT/out.plaidfacts"
+rm -f "$UNIT_OUT/out.sarif" "$UNIT_OUT/out.plaidfacts" "$UNIT_OUT/out.plaidexport"
 (cd "$EXECROOT" && env GOCACHEPROG=/nonexistent/cacheprog XDG_CACHE_HOME=/nonexistent/xdg \
    HOME=/nonexistent/home GOCACHE=/nonexistent/gocache PLAID_CACHE_BACKEND=gocacheprog \
    "$PLAID_BIN" unit --cfg "$UNIT_CFG_REPLAY" --cache-dir "$CACHE_DIR") \
@@ -550,7 +552,7 @@ pass "(v) //bazel:binary swaps in a prebuilt executable with identical output an
 # actions they name, at max(input-count tier, tag): the library's
 # 256 MB is below its 512 MB tier and adds nothing, the go_test's
 # internal archive takes its scoped 3072 MB, and the external archive
-# and the generated test main take the plain 1024 MB.
+# takes the plain 1024 MB. The generated test main is not linted.
 memtag_exec_info() { # <output basename> -> the action's ExecutionInfo line (or empty)
   awk -v want="/memtag/$1.plaid.sarif," '
     /^action / { info = ""; hit = 0 }
@@ -564,7 +566,7 @@ run aquery --config=lint --norun_validations 'mnemonic("PlaidLint", //memtag:all
 [[ "$CODE" -eq 0 ]] || fail "(w) aquery of //memtag PlaidLint actions failed"
 grep -q "resources:memory" <<<"$(memtag_exec_info memtag)" \
   && fail "(w) a tag below the input-count tier must not lower or add a reservation"
-for want in "memtag_test:resources:memory:1024" "memtag_test.internal:resources:memory:3072" "memtag_test.xtest:resources:memory:1024"; do
+for want in "memtag_test.internal:resources:memory:3072" "memtag_test.xtest:resources:memory:1024"; do
   name="${want%%:*}"
   grep -qF "${want#*:}" <<<"$(memtag_exec_info "$name")" \
     || fail "(w) expected ${want#*:} on the $name PlaidLint action"

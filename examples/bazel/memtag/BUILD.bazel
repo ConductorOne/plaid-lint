@@ -12,8 +12,7 @@ go_library(
 )
 
 # The internal test archive gets its scoped 3072 MB; the external
-# (xtest) archive and the generated test main fall back to the plain
-# 1024 MB.
+# (xtest) archive falls back to the plain 1024 MB.
 go_test(
     name = "memtag_test",
     srcs = [

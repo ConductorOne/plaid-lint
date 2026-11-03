@@ -9,5 +9,11 @@ local_path_override(
 bazel_dep(name = "rules_go", version = "0.62.0")
 bazel_dep(name = "gazelle", version = "0.52.2")
 
+# plaid actions require @plaid_lint//bazel/platforms:lint_queue, and the
+# plaid_lint module registers no execution platform. A root module
+# registers either its own platform carrying that constraint or this
+# host fallback.
+register_execution_platforms("@plaid_lint//bazel/platforms:host_lint")
+
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(version = "1.27.3")

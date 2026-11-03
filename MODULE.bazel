@@ -9,6 +9,17 @@ module(
 bazel_dep(name = "rules_go", version = "0.62.0")
 bazel_dep(name = "gazelle", version = "0.52.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# This module registers no execution platform for consumers. A root
+# module registers either its own platform carrying
+# //bazel/platforms:lint_queue or the //bazel/platforms:host_lint host
+# fallback; this repository's own build (dev_dependency: root only)
+# uses the fallback.
+register_execution_platforms(
+    "//bazel/platforms:host_lint",
+    dev_dependency = True,
+)
 
 # Keep the hermetic SDK aligned with the compiler used by CI and releases.
 # dev_dependency: the SDK applies only when plaid_lint is the root module;

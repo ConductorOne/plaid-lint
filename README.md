@@ -111,13 +111,25 @@ plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
   },
   "deps": {
     "importcfg": "foo.importcfg",
-    "facts": {"example.com/mod/pkg/bar": "bar.plaidfacts"}
+    "facts": {"example.com/mod/pkg/bar": "bar.plaidfacts"},
+    "stdlib_dir": "stdlib"
   },
   "module": {"go_mod": "go.mod", "path": "example.com/mod"},
   "analysis": {"config": ".golangci.yml", "mode": "full"},
-  "out": {"facts": "foo.plaidfacts", "sarif": "foo.plaid.sarif"}
+  "out": {"facts": "foo.plaidfacts", "sarif": "foo.plaid.sarif", "export": "foo.plaidexport"}
 }
 ```
+
+- `deps.importcfg` `packagefile` entries may name compiler export data (a rules_go `.x`, a
+  `go list -export` archive) or a dependency's `out.export`; `deps.stdlib_dir` resolves
+  std imports from a `<goos>_<goarch>/<importpath>.a` tree, either a compiled stdlib or the
+  output of `plaid-lint stdlib`.
+- `out.export` (optional, `full` and `facts_only`) receives the package's deep gc export data,
+  so dependents can type-check against it instead of compiling the package.
+- `plaid-lint stdlib --goroot DIR --goos OS --goarch ARCH --out DIR [FILE...]` type-checks an
+  SDK's standard library from source and writes the `stdlib_dir` tree (raw gc export data in
+  `.a`-named files). FILE arguments, typically via an `@params` file, restrict it to exactly
+  those SDK sources.
 
 - `analysis.mode` is `full` (default), `facts_only` (fact-producing analyzers only, no
   diagnostics — for dependencies excluded from the lint scope, like nogo's `-facts_only`), or
@@ -126,7 +138,8 @@ plaid-lint unit --worker     # Bazel persistent-worker JSON protocol
   exit code. Exit codes: `0` analysis completed, `2` bad flags, `3` unusable inputs or internal
   error, `7` invalid `.golangci` config.
 - Every declared output is written on every success — including packages that fail to
-  type-check, which surface as `typecheck` findings with an empty fact set.
+  type-check, which surface as `typecheck` findings with an empty fact set (and export data
+  for whatever did type-check).
 - All caching is the build system's concern by default: unit mode opens none of plaid-lint's
   L0/L1/L2 caches, because those resolve their root from the ambient environment
   (`XDG_CACHE_HOME`, `PLAID_*`, `GOCACHEPROG`) and an action must not depend on host state the
@@ -174,6 +187,10 @@ local_path_override(
     module_name = "plaid_lint",
     path = "third_party/plaid-lint",
 )
+# plaid actions need an execution platform carrying
+# @plaid_lint//bazel/platforms:lint_queue; plaid_lint registers none.
+# Register your own, or this host fallback:
+register_execution_platforms("@plaid_lint//bazel/platforms:host_lint")
 ```
 
 ```python
@@ -198,8 +215,21 @@ everything it builds. What you get:
 
 - **Per-package actions, cached like compiles.** Each Go package gets one `PlaidLint`
   action: sources + direct deps' export data + direct deps' `.plaidfacts` in,
-  `.plaidfacts` + SARIF out. Content-keyed, incremental, remote-cacheable,
+  `.plaidfacts` + `.plaidexport` + SARIF out. Content-keyed, incremental, remote-cacheable,
   remote-executable; an unchanged package is never re-linted.
+- **Linting compiles nothing.** Each `PlaidLint` action writes its package's deep gc export
+  data (`.plaidexport`), and dependents type-check against that instead of rules_go's
+  compiled `.x`; the standard library comes from one `PlaidStdlibExport` action per Go mode
+  (`plaid_stdlib_export`, selected by `--@plaid_lint//bazel:stdlib_export`) instead of the
+  `GoStdlib` action. A lint-only build therefore schedules no `GoCompilePkg` or `GoStdlib`
+  action. A dependency the aspect does not visit (an implicit dep outside `deps`/`embed`)
+  or a cgo archive in a cgo-enabled build still contributes its compiled `.x`.
+- **Lint actions have their own exec group.** Every plaid action runs in the `lint` exec
+  group, which requires `@plaid_lint//bazel/platforms:lint_queue`. This module registers
+  no execution platform, so the root module must register one: either
+  `register_execution_platforms("@plaid_lint//bazel/platforms:host_lint")` (the host plus
+  that constraint) to run lint on the host, or its own execution platform carrying
+  `@plaid_lint//bazel/platforms:lint_queue` to send lint to a dedicated pool.
 - **Findings fail the build through Bazel validations.** `PlaidLint` records findings
   as SARIF and never fails; a separate `ValidatePlaidLint` action (the `_validation`
   output group) fails on them. `--norun_validations` flips to report-only while still

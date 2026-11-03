@@ -39,7 +39,8 @@ type Result struct {
 //   - On a nil error, every output named in cfg.Out exists and is
 //     well-formed, whatever the findings — including packages that
 //     fail to parse or type-check (those surface as `typecheck`
-//     diagnostics, and the facts output is an empty fact set).
+//     diagnostics, the facts output is an empty fact set, and the
+//     export output describes whatever the checker could type).
 //   - Nothing is discovered: no toolchain, no network, no environment
 //     other than the declared inputs. The exclusion filter reads the
 //     declared source files (nolint, generated-file detection) and
@@ -61,6 +62,7 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 	var (
 		analyzedFiles []string
 		compiled      = true
+		checked       *checkedPackage
 	)
 	switch cfg.EffectiveMode() {
 	case ModeModule:
@@ -75,6 +77,7 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 		if err != nil {
 			return nil, err
 		}
+		checked = cp
 		analyzedFiles = cp.goFiles
 		compiled = cp.compiles()
 
@@ -129,6 +132,18 @@ func Run(ctx context.Context, cfg *Config, golangci *config.Config, reg *registr
 	if cfg.Out.Facts != "" {
 		if err := writeFileAtomic(cfg.Out.Facts, wrapFacts(factsBlob)); err != nil {
 			return nil, fmt.Errorf("unit: write facts: %w", err)
+		}
+	}
+	if cfg.Out.Export != "" && checked != nil {
+		blob, warn, err := encodeExport(checked)
+		if err != nil {
+			return nil, err
+		}
+		if warn != "" {
+			res.Warnings = append(res.Warnings, warn)
+		}
+		if err := writeFileAtomic(cfg.Out.Export, blob); err != nil {
+			return nil, fmt.Errorf("unit: write export data: %w", err)
 		}
 	}
 	return res, nil

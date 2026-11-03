@@ -17,9 +17,10 @@
 //
 //   - the action's declared inputs: the unit.json bytes verbatim plus
 //     the content of every file unit.json names (sources, ignored
-//     sources, the importcfg and every export-data file it lists, the
-//     dependency fact files, the .golangci config, go.mod, and the
-//     declared stdlib tree), and
+//     sources, the importcfg and every export-data file it lists —
+//     compiler .x archives and dependencies' out.export files alike,
+//     by content — the dependency fact files, the .golangci config,
+//     go.mod, and the declared stdlib tree), and
 //   - the identity of the analyzing binary.
 //
 // Nothing else participates. No environment variable is read here or
@@ -186,7 +187,7 @@ func anyAbsolutePath(cfg *unit.Config) bool {
 	paths = append(paths,
 		cfg.Deps.Importcfg, cfg.Deps.StdlibDir,
 		cfg.Analysis.Config, cfg.Module.GoMod,
-		cfg.Out.Sarif, cfg.Out.Facts)
+		cfg.Out.Sarif, cfg.Out.Facts, cfg.Out.Export)
 	for _, p := range paths {
 		if p != "" && filepath.IsAbs(p) {
 			return true
