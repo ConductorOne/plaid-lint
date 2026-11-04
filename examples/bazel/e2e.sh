@@ -31,6 +31,10 @@
 #  14. --@plaid_lint//bazel:binary swaps in a prebuilt executable:
 #      the source-built //cmd/plaid-lint leaves the action graph and
 #      the suite output is byte-identical
+#  15. plaid-lint-memory-mb tags reserve memory for PlaidLint actions
+#      only: max(input-count tier, tag), scoped per test archive,
+#      malformed tags fail analysis, and adding a tag reuses cached
+#      results
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -540,5 +544,84 @@ grep -qF "FAIL — 5 enforced finding(s)" "$PREBUILT_TEST_LOG" \
   || fail "(v) expected the same enforced findings with the prebuilt binary"
 rm -rf "$PREBUILT_REPO" "$PREBUILT_SARIF"
 pass "(v) //bazel:binary swaps in a prebuilt executable with identical output and no source build"
+
+# (w) Lint-only memory tags. //memtag's tags must surface as a
+# `resources:memory:N` execution requirement on exactly the PlaidLint
+# actions they name, at max(input-count tier, tag): the library's
+# 256 MB is below its 512 MB tier and adds nothing, the go_test's
+# internal archive takes its scoped 3072 MB, and the external archive
+# and the generated test main take the plain 1024 MB.
+memtag_exec_info() { # <output basename> -> the action's ExecutionInfo line (or empty)
+  awk -v want="/memtag/$1.plaid.sarif," '
+    /^action / { info = ""; hit = 0 }
+    /ExecutionInfo:/ { info = $0 }
+    /Outputs:/ && index($0, want) { hit = 1 }
+    /^$/ && hit { print info; hit = 0 }
+    END { if (hit) print info }
+  ' <<<"$OUT"
+}
+run aquery --config=lint --norun_validations 'mnemonic("PlaidLint", //memtag:all)'
+[[ "$CODE" -eq 0 ]] || fail "(w) aquery of //memtag PlaidLint actions failed"
+grep -q "resources:memory" <<<"$(memtag_exec_info memtag)" \
+  && fail "(w) a tag below the input-count tier must not lower or add a reservation"
+for want in "memtag_test:resources:memory:1024" "memtag_test.internal:resources:memory:3072" "memtag_test.xtest:resources:memory:1024"; do
+  name="${want%%:*}"
+  grep -qF "${want#*:}" <<<"$(memtag_exec_info "$name")" \
+    || fail "(w) expected ${want#*:} on the $name PlaidLint action"
+done
+run aquery --config=lint --norun_validations '//memtag:all'
+[[ "$CODE" -eq 0 ]] || fail "(w) aquery of //memtag actions failed"
+LEAKED="$(awk '/Mnemonic:/ { m = $2 } /ExecutionInfo:.*resources:memory/ && m != "PlaidLint" { print m }' <<<"$OUT")"
+[[ -z "$LEAKED" ]] || fail "(w) the lint-only tag leaked onto non-PlaidLint actions: $LEAKED"
+
+# Execution info is part of Bazel's local action key but not of the
+# remote-execution action digest, so a target that gains a tag reruns
+# nothing: its PlaidLint actions are served from the (disk/remote)
+# cache populated before the tag existed. --nouse_action_cache keeps
+# the local action cache from answering either build, so the
+# untagged build really populates the fresh disk cache and every
+# tagged action has to come from it.
+MEMTAG_BUILD="$(mktemp)"
+MEMTAG_DISK_CACHE="$(mktemp -d)"
+cp memtag/BUILD.bazel "$MEMTAG_BUILD"
+trap 'cp "$MEMTAG_BUILD" memtag/BUILD.bazel; rm -rf memtag_bad' EXIT
+MEMTAG_CACHE_FLAGS=(--config=lint --norun_validations --nouse_action_cache "--disk_cache=$MEMTAG_DISK_CACHE")
+sed -i '/plaid-lint-memory-mb/d' memtag/BUILD.bazel
+run build "${MEMTAG_CACHE_FLAGS[@]}" //memtag:all
+cp "$MEMTAG_BUILD" memtag/BUILD.bazel
+[[ "$CODE" -eq 0 ]] || fail "(w) untagged //memtag build failed"
+run build "${MEMTAG_CACHE_FLAGS[@]}" //memtag:all
+[[ "$CODE" -eq 0 ]] || fail "(w) tagged //memtag build failed"
+SUMMARY="$(grep -E '^INFO: [0-9]+ process' <<<"$OUT" || true)"
+grep -q "disk cache hit" <<<"$SUMMARY" || fail "(w) expected the tagged actions to hit the disk cache: ${SUMMARY:-<none>}"
+if grep -qE 'sandbox|worker|\blocal\b|standalone' <<<"$SUMMARY"; then
+  fail "(w) adding a memory tag re-executed actions: $SUMMARY"
+fi
+rm -rf "$MEMTAG_DISK_CACHE"
+
+# Malformed tags fail analysis with a message naming the tag; a typo
+# that silently reserved nothing would defeat the tag's purpose.
+mkdir -p memtag_bad
+cp memtag/memtag.go memtag/memtag_test.go memtag_bad/
+for case in \
+  'go_library|"plaid-lint-memory-mb=lots"|is not a positive integer' \
+  'go_library|"plaid-lint-memory-mb=0"|is not a positive integer' \
+  'go_library|"plaid-lint-memory-mb=-5"|is not a positive integer' \
+  'go_library|"plaid-lint-memory-mb=lib:512"|unknown scope' \
+  'go_library|"plaid-lint-memory-mb=internal:512"|applies only to go_test targets' \
+  'go_test|"plaid-lint-memory-mb=1024", "plaid-lint-memory-mb=2048"|more than one plaid-lint-memory-mb tag'; do
+  IFS='|' read -r kind tags want <<<"$case"
+  if [[ "$kind" == go_library ]]; then
+    body="name = \"bad\", srcs = [\"memtag.go\"], importpath = \"example.com/plaidexample/memtag_bad\""
+  else
+    body="name = \"bad\", srcs = [\"memtag.go\", \"memtag_test.go\"]"
+  fi
+  printf 'load("@rules_go//go:def.bzl", "%s")\n\n%s(%s, tags = [%s])\n' "$kind" "$kind" "$body" "$tags" >memtag_bad/BUILD.bazel
+  run build --config=lint --norun_validations //memtag_bad:bad
+  [[ "$CODE" -ne 0 ]] || fail "(w) expected analysis to fail for tags [$tags]"
+  grep -qF "$want" <<<"$OUT" || fail "(w) expected '$want' for tags [$tags]"
+done
+rm -rf memtag_bad
+pass "(w) plaid-lint-memory-mb reserves max(tier, tag) on PlaidLint actions only, rejects malformed tags, and reuses cached results"
 
 echo "OK: all e2e assertions passed"

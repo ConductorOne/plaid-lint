@@ -447,7 +447,7 @@ func TestUnitCache_WorkerSharesTheCache(t *testing.T) {
 	if sess.cache == nil {
 		t.Fatal("newUnitSession did not open the cache")
 	}
-	if code := unitWorkerLoop(&in, &out, sess); code != exitSuccess {
+	if code := unitWorkerLoop(&in, &out, sess, nil); code != exitSuccess {
 		t.Fatalf("worker loop exit=%d output=%q", code, out.String())
 	}
 	resps := decodeWorkResponses(t, &out)

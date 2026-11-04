@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+# Lint-only memory reservations (see e2e.sh section (w)). 256 MB is
+# below the 512 MB input-count tier, so the tier wins and the
+# library's PlaidLint action carries no override.
+go_library(
+    name = "memtag",
+    srcs = ["memtag.go"],
+    importpath = "example.com/plaidexample/memtag",
+    tags = ["plaid-lint-memory-mb=256"],
+    visibility = ["//visibility:public"],
+)
+
+# The internal test archive gets its scoped 3072 MB; the external
+# (xtest) archive and the generated test main fall back to the plain
+# 1024 MB.
+go_test(
+    name = "memtag_test",
+    srcs = [
+        "memtag_ext_test.go",
+        "memtag_test.go",
+    ],
+    embed = [":memtag"],
+    tags = [
+        "plaid-lint-memory-mb=1024",
+        "plaid-lint-memory-mb=internal:3072",
+    ],
+)

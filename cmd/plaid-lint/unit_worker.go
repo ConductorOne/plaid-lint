@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
+	"runtime/metrics"
 	"strings"
 )
 
@@ -66,12 +68,83 @@ type workResponse struct {
 // The session is built once, from the startup flags: --cache-dir is a
 // worker-lifetime setting, since a per-request cache directory would
 // let two requests in one process disagree about where results live.
-func (a *app) runUnitWorker(sess *unitSession) int {
-	return unitWorkerLoop(os.Stdin, a.stdout, sess)
+func (a *app) runUnitWorker(sess *unitSession, releaseHeapMB int) int {
+	return unitWorkerLoop(os.Stdin, a.stdout, sess, newHeapReleaser(releaseHeapMB))
 }
 
-// unitWorkerLoop is the testable core of runUnitWorker.
-func unitWorkerLoop(in io.Reader, out io.Writer, sess *unitSession) int {
+// defaultWorkerReleaseHeapMB is the --worker-release-heap-mb default.
+// Most packages finish well under it, so they never pay for a release;
+// the few large ones that cross it are the ones whose retained heap
+// matters to the host.
+const defaultWorkerReleaseHeapMB = 1024
+
+// heapReleaser returns a persistent worker's heap to the OS after a
+// request that grew it past a threshold.
+//
+// The Go runtime keeps freed heap pages mapped and hands them back
+// only gradually, so a worker that has just analyzed a large package
+// keeps that package's peak heap resident while it sits idle. Bazel
+// schedules worker actions against a per-action memory reservation
+// that it releases when the response arrives; the retained heap is
+// invisible to that accounting, and several idle workers each
+// holding a multi-gigabyte heap can exhaust the host. Releasing it
+// right after the response costs one forced GC over a heap that is,
+// at that point, almost entirely garbage.
+type heapReleaser struct {
+	thresholdBytes uint64
+	retained       func() uint64 // heap bytes currently held from the OS
+	free           func()        // returns as much memory to the OS as possible
+}
+
+// newHeapReleaser returns a releaser for thresholdMB, or nil (never
+// release) when thresholdMB is not positive.
+func newHeapReleaser(thresholdMB int) *heapReleaser {
+	if thresholdMB <= 0 {
+		return nil
+	}
+	return &heapReleaser{
+		thresholdBytes: uint64(thresholdMB) << 20,
+		retained:       retainedHeapBytes,
+		free:           debug.FreeOSMemory,
+	}
+}
+
+// afterResponse releases the heap when it exceeds the threshold and
+// reports whether it did. It runs after the response is written, so
+// the release never delays the action Bazel is waiting on.
+func (r *heapReleaser) afterResponse() bool {
+	if r == nil || r.retained() <= r.thresholdBytes {
+		return false
+	}
+	r.free()
+	return true
+}
+
+// retainedHeapBytes is the heap memory the runtime holds from the OS:
+// live and not-yet-swept objects, fragmentation, and free pages not
+// yet returned. Because freed pages stay retained until the scavenger
+// or a release returns them, right after a request this is at least
+// the request's heap high-water mark, less whatever the background
+// scavenger already returned.
+func retainedHeapBytes() uint64 {
+	samples := []metrics.Sample{
+		{Name: "/memory/classes/heap/objects:bytes"},
+		{Name: "/memory/classes/heap/unused:bytes"},
+		{Name: "/memory/classes/heap/free:bytes"},
+	}
+	metrics.Read(samples)
+	var total uint64
+	for _, s := range samples {
+		if s.Value.Kind() == metrics.KindUint64 {
+			total += s.Value.Uint64()
+		}
+	}
+	return total
+}
+
+// unitWorkerLoop is the testable core of runUnitWorker. A nil release
+// keeps every request's heap until the runtime returns it on its own.
+func unitWorkerLoop(in io.Reader, out io.Writer, sess *unitSession, release *heapReleaser) int {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
 	enc := json.NewEncoder(out)
@@ -124,6 +197,7 @@ func unitWorkerLoop(in io.Reader, out io.Writer, sess *unitSession) int {
 			fmt.Fprintf(os.Stderr, "plaid-lint: unit worker: write response: %v\n", err)
 			return exitInternalError
 		}
+		release.afterResponse()
 	}
 	if err := sc.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "plaid-lint: unit worker: read: %v\n", err)

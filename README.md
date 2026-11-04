@@ -216,7 +216,11 @@ everything it builds. What you get:
   actions through Bazel's JSON persistent-worker protocol, amortizing process startup
   and config parsing across actions. Output is byte-identical to one-shot execution.
   Give each additionally-configured aspect variant a distinct `output_suffix` so their
-  declared outputs don't collide in one build.
+  declared outputs don't collide in one build. After any request that leaves more than
+  1 GiB of heap retained, the worker returns it to the OS once the response is written
+  (`--worker-release-heap-mb`, set with `--worker_extra_flag=PlaidLint=...`; `0`
+  disables), so an idle worker does not hold a large package's peak heap that Bazel's
+  per-action memory accounting no longer sees.
 - **Module lint.** `go.mod`-scoped linters (`gomoddirectives`) run once per module via
   the `plaid_module_lint` rule.
 
@@ -337,6 +341,46 @@ fully cached and incremental after that):
   they are lint *subjects*). This is the per-target counterpart of
   `facts_only`, which says the same thing by import-path prefix and applies
   globally to an invocation.
+
+### Memory reservations (`plaid-lint-memory-mb`)
+
+Each `PlaidLint` action reserves memory from Bazel's local scheduler by a coarse
+tier on its declared-input count (512 MB, 2048 MB above 500 inputs, 6144 MB above
+2,000). Input count is only a rough proxy for the type-checker's working set: a large
+service package with ~500 direct dependencies can peak at several GB while sitting in
+the 2048 MB tier. Raise the reservation for such a target with a tag on the target
+itself:
+
+```starlark
+go_test(
+    name = "service_test",
+    embed = [":service"],
+    srcs = [...],
+    tags = [
+        # Every PlaidLint action of the target.
+        "plaid-lint-memory-mb=2048",
+        # Only the internal test archive (package service + in-package tests).
+        "plaid-lint-memory-mb=internal:6144",
+        # Only the external test archive (package service_test):
+        # "plaid-lint-memory-mb=xtest:1024",
+    ],
+)
+```
+
+- The value is a positive whole number of MB. The reservation is the **larger** of
+  the tag and the input-count tier, so a tag never lowers a reservation.
+- `internal:<N>` and `xtest:<N>` apply to a `go_test`'s internal and external test
+  archives and override the plain form for those archives. They are an error on
+  other rule kinds. The two archives of one large test target can differ by an order
+  of magnitude: the external archive often type-checks only a thin `_test` package.
+- A malformed tag (non-numeric, zero, unknown scope, or two tags for the same scope)
+  fails analysis with a message naming the target and tag.
+- The tag reaches only `PlaidLint` actions, unlike Bazel's own `resources:memory:<N>`
+  target tag, which also reserves memory for the target's compile and test actions.
+- It is carried as a `resources:memory:<N>` execution requirement. Execution
+  requirements are part of Bazel's local action key, so tagged actions run again
+  locally, but they are not part of the remote-execution action digest: adding or
+  changing a tag is served from an existing disk or remote cache.
 
 ### Prebuilt binary (`--@plaid_lint//bazel:binary`)
 

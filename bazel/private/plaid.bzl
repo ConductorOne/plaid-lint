@@ -104,16 +104,76 @@ def _matches_prefix(importpath, prefixes):
 def _matches_prefix_any(importpaths, prefixes):
     return any([_matches_prefix(p, prefixes) for p in importpaths])
 
+def _memory_tier_mb(inputs_size):
+    if inputs_size > 2000:
+        return 6144
+    if inputs_size > 500:
+        return 2048
+    return 512
+
 def _resource_set(_os_name, inputs_size):
     """Coarse memory tiers by declared-input count. The input count is
     dominated by the dependency closure's export-data files, which
     tracks type-check working-set size well enough for scheduling;
-    refine with measured per-package data when available."""
-    if inputs_size > 2000:
-        return {"memory": 6144, "cpu": 1}
-    if inputs_size > 500:
-        return {"memory": 2048, "cpu": 1}
-    return {"memory": 512, "cpu": 1}
+    refine with measured per-package data when available, or override
+    per target with the plaid-lint-memory-mb tag."""
+    return {"memory": _memory_tier_mb(inputs_size), "cpu": 1}
+
+# Lint-only memory override, read from the linted target's tags:
+#
+#   plaid-lint-memory-mb=<N>           every PlaidLint action of the target
+#   plaid-lint-memory-mb=internal:<N>  a go_test's internal test archive(s)
+#   plaid-lint-memory-mb=xtest:<N>     a go_test's external (_test) archive(s)
+#
+# A scoped tag takes precedence over the plain one for its archives.
+# The tag only reaches PlaidLint actions; unlike a `resources:memory:N`
+# tag on the target itself, it leaves the target's compile and test
+# reservations alone.
+_MEMORY_TAG_PREFIX = "plaid-lint-memory-mb="
+_MEMORY_SCOPES = ["internal", "xtest"]
+
+def _parse_memory_tags(label, rule_kind, tags):
+    """Parses plaid-lint-memory-mb tags into {scope: megabytes}.
+
+    The plain form is keyed by "". Malformed values fail analysis with
+    a message naming the target and the offending tag: a typo that
+    silently reserved nothing would defeat the purpose of the tag.
+    """
+    out = {}
+    for tag in tags:
+        if not tag.startswith(_MEMORY_TAG_PREFIX):
+            continue
+        value = tag[len(_MEMORY_TAG_PREFIX):]
+        scope = ""
+        if ":" in value:
+            scope, _, value = value.partition(":")
+            if scope not in _MEMORY_SCOPES:
+                fail("%s: tag %r: unknown scope %r (want <N>, internal:<N> or xtest:<N>)" % (label, tag, scope))
+            if rule_kind != "go_test":
+                fail("%s: tag %r: the %r scope applies only to go_test targets, not %s" % (label, tag, scope, rule_kind))
+        if not value.isdigit() or value.startswith("0"):
+            fail("%s: tag %r: %r is not a positive integer number of megabytes" % (label, tag, value))
+        if scope in out:
+            fail("%s: tag %r: more than one plaid-lint-memory-mb tag for %s" % (label, tag, "scope %r" % scope if scope else "the unscoped form"))
+        out[scope] = int(value)
+    return out
+
+def _memory_requirements(overrides, scope, inputs_size):
+    """Execution requirements reserving max(tier, tag) MB for one action.
+
+    Bazel replaces the resource_set's memory with a `resources:memory:N`
+    execution requirement, so the requirement carries the larger of the
+    two: a tag never lowers a reservation the input-count tier would
+    have made. Execution info is not part of the remote-execution
+    action digest, so adding or changing the tag reuses cached results.
+    """
+    mb = overrides.get(scope, overrides.get(""))
+    if mb == None:
+        return {}
+    tier = _memory_tier_mb(inputs_size)
+    if mb <= tier:
+        return {}
+    return {"resources:memory:%d" % mb: ""}
 
 def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker, output_suffix):
     if GoArchive not in target:
@@ -150,6 +210,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
 
     env = struct(
         ctx = ctx,
+        memory_overrides = _parse_memory_tags(target.label, ctx.rule.kind, getattr(ctx.rule.attr, "tags", [])),
         binary = ctx.executable._plaid_lint,
         go = go,
         config = config,
@@ -162,7 +223,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
 
     base_name = target.label.name + output_suffix
     lints = []
-    main = _lint_archive(env, target, archive, base_name, by_key)
+    main = _lint_archive(env, target, archive, base_name, by_key, "")
     if main:
         lints.append(main)
 
@@ -203,13 +264,13 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
         test_by_key = dict(by_key)
         for i, d in enumerate(internal):
             suffix = ".internal" if i == 0 else ".internal.%d" % i
-            res = _lint_archive(env, target, d, base_name + suffix, test_by_key)
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, "internal")
             if res:
                 lints.append(res)
                 test_by_key[_pkg_key(d.data)] = res.facts
         for i, d in enumerate(external):
             suffix = ".xtest" if i == 0 else ".xtest.%d" % i
-            res = _lint_archive(env, target, d, base_name + suffix, test_by_key)
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, "xtest")
             if res:
                 lints.append(res)
 
@@ -286,9 +347,11 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
     providers.append(OutputGroupInfo(**output_groups))
     return providers
 
-def _lint_archive(env, target, archive, base_name, by_key):
+def _lint_archive(env, target, archive, base_name, by_key, memory_scope):
     """Emits the PlaidLint action for one GoArchive. Returns a struct
-    (facts, sarif, mode) or None when the archive has nothing to lint."""
+    (facts, sarif, mode) or None when the archive has nothing to lint.
+    memory_scope selects which plaid-lint-memory-mb tag applies:
+    "internal" or "xtest" for a go_test's test archives, "" otherwise."""
     ctx = env.ctx
     data = archive.data
     srcs = [s for s in data.srcs if s.extension == "go"]
@@ -435,6 +498,12 @@ def _lint_archive(env, target, archive, base_name, by_key):
         request_args.set_param_file_format("multiline")
         execution_requirements["supports-workers"] = "1"
         execution_requirements["requires-worker-protocol"] = "json"
+
+    # Bazel passes resource_set the action's flattened input count,
+    # which also includes the tool; count it too, so the tier compared
+    # against the tag is the one Bazel computes (barring tool runfiles,
+    # which can only matter within a few inputs of a tier boundary).
+    execution_requirements.update(_memory_requirements(env.memory_overrides, memory_scope, len(inputs) + 1))
 
     ctx.actions.run(
         mnemonic = "PlaidLint",
