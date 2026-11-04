@@ -38,6 +38,7 @@ func (a *app) runUnit(args []string) int {
 	workerMode := fs.Bool("worker", false, "run as a Bazel persistent worker (JSON protocol on stdin/stdout)")
 	persistentWorker := fs.Bool("persistent_worker", false, "alias for --worker; Bazel appends this flag when it launches a persistent worker process")
 	cacheDir := fs.String("cache-dir", "", "reuse results across actions through a content-addressed cache in this directory (off when empty)")
+	releaseHeapMB := fs.Int("worker-release-heap-mb", defaultWorkerReleaseHeapMB, "in --worker mode, return the heap to the OS after any request that leaves more than this many MB of heap retained (0 disables)")
 
 	args, aerr := expandArgsFiles(args)
 	if aerr != nil {
@@ -67,7 +68,7 @@ func (a *app) runUnit(args []string) int {
 	}
 	sess := newUnitSession(*cacheDir, a.stderr)
 	if *workerMode || *persistentWorker {
-		return a.runUnitWorker(sess)
+		return a.runUnitWorker(sess, *releaseHeapMB)
 	}
 	if *cfgPath == "" {
 		fmt.Fprintln(a.stderr, "plaid-lint: unit: --cfg is required")
@@ -394,6 +395,14 @@ Flags:
                            JSON WorkRequest per line on stdin
                            (arguments: ["--cfg", <path>]), write one
                            JSON WorkResponse per line on stdout
+      --worker-release-heap-mb int
+                           in --worker mode, after writing a response,
+                           return the heap to the OS when more than
+                           this many MB of it is retained (default
+                           1024; 0 disables). Keeps an idle worker
+                           from holding a large package's peak heap,
+                           which Bazel's per-action memory accounting
+                           does not see
       --cache-dir string   reuse results across actions through a
                            content-addressed cache rooted here. Off
                            unless set. The key is derived only from

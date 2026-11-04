@@ -39,6 +39,20 @@ them enforced).
 
 Module-scoped linters (gomoddirectives) run once per module via
 plaid_module_lint — see that rule's doc.
+
+Memory: each PlaidLint action reserves local memory by a coarse
+declared-input-count tier (512 / 2048 / 6144 MB). A target whose lint
+needs more raises it with a tag that reaches only its PlaidLint
+actions (compile and test reservations are untouched):
+
+    tags = ["plaid-lint-memory-mb=4096"]           # all of the target's
+    tags = ["plaid-lint-memory-mb=internal:4096"]  # go_test internal archive
+    tags = ["plaid-lint-memory-mb=xtest:1024"]     # go_test external archive
+
+The reservation is max(tier, tag); a scoped tag overrides the plain one
+for its archive; malformed tags fail analysis. The tag becomes a
+`resources:memory:<N>` execution requirement, which is not part of the
+remote-execution action digest, so adding one reuses cached results.
 """
 
 load(
