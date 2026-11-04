@@ -5,6 +5,8 @@
 package unit
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -12,6 +14,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,30 +101,55 @@ func (imp *exportDataImporter) Import(path string) (*types.Package, error) {
 	if !ok {
 		return nil, fmt.Errorf("package %q not named by importcfg", path)
 	}
-	f, err := os.Open(file)
+	pkg, err := readExportFile(imp.fset, imp.imports, path, file)
 	if err != nil {
-		err = fmt.Errorf("open export data for %q: %w", path, err)
-		imp.infraErrs = append(imp.infraErrs, err)
-		return nil, err
-	}
-	defer f.Close()
-	// NewReader locates the export data section whether the file is
-	// raw export data (rules_go .x, `go tool compile -o`) or a
-	// package archive (`go list -export`, .a files) — the same
-	// tolerance nogo's importer has.
-	r, err := gcexportdata.NewReader(f)
-	if err != nil {
-		err = fmt.Errorf("export data for %q (%s): %w", path, file, err)
-		imp.infraErrs = append(imp.infraErrs, err)
-		return nil, err
-	}
-	pkg, err := gcexportdata.Read(r, imp.fset, imp.imports, path)
-	if err != nil {
-		err = fmt.Errorf("decode export data for %q (%s): %w", path, file, err)
 		imp.infraErrs = append(imp.infraErrs, err)
 		return nil, err
 	}
 	return pkg, nil
+}
+
+// readExportFile decodes the export data in file for import path
+// path, memoizing through imports.
+//
+// Two encodings are accepted, told apart by their leading bytes:
+// compiler output — a package archive (rules_go .x, `go list -export`,
+// a compiled stdlib .a) or an object file — whose export section
+// gcexportdata.NewReader locates, the same tolerance nogo's importer
+// has; and raw gcexportdata as `plaid-lint unit` (out.export) and
+// `plaid-lint stdlib` write it, which gcexportdata.Read consumes
+// directly. Neither raw format can begin with an archive or object
+// header, so the sniff is unambiguous.
+func readExportFile(fset *token.FileSet, imports map[string]*types.Package, path, file string) (*types.Package, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, fmt.Errorf("open export data for %q: %w", path, err)
+	}
+	defer f.Close()
+	br := bufio.NewReader(f)
+	var r io.Reader = br
+	if head, _ := br.Peek(len(objectHeader)); isCompilerOutput(head) {
+		r, err = gcexportdata.NewReader(br)
+		if err != nil {
+			return nil, fmt.Errorf("export data for %q (%s): %w", path, file, err)
+		}
+	}
+	pkg, err := gcexportdata.Read(r, fset, imports, path)
+	if err != nil {
+		return nil, fmt.Errorf("decode export data for %q (%s): %w", path, file, err)
+	}
+	return pkg, nil
+}
+
+const (
+	archiveHeader = "!<arch>\n"
+	objectHeader  = "go object "
+)
+
+// isCompilerOutput reports whether head starts like a package archive
+// or a Go object file rather than raw gcexportdata.
+func isCompilerOutput(head []byte) bool {
+	return bytes.HasPrefix(head, []byte(archiveHeader)) || bytes.HasPrefix(head, []byte(objectHeader))
 }
 
 // typecheck parses and type-checks the package described by cfg.

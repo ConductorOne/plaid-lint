@@ -16,6 +16,7 @@ go_library(
         "run.go",
         "sink_other.go",
         "sink_unix.go",
+        "stdlib.go",
         "unit.go",
         "unit_worker.go",
         "version.go",

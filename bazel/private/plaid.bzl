@@ -5,12 +5,21 @@
 """Implementation of the plaid_lint aspect and plaid_module_lint rule.
 
 Consumer API lives in //bazel:defs.bzl. The action topology mirrors
-rules_go's nogo:
+rules_go's nogo, except that type information flows between lint
+actions instead of coming from compiles:
 
-  GoCompilePkg (exists) ──.x──▶ PlaidLint ──sarif──▶ ValidatePlaidLint
-       dep facts ──.plaidfacts──▶   │                  (fails iff findings;
-                                    └─▶ .plaidfacts      _validation group)
-                                        for dependents
+  PlaidStdlibExport ──stdlib tree──▶ PlaidLint ──sarif──▶ ValidatePlaidLint
+  dep PlaidLint ─.plaidexport + .plaidfacts─▶ │          (fails iff findings;
+                                              ├─▶ .plaidfacts  _validation group)
+                                              └─▶ .plaidexport for dependents
+
+Each PlaidLint action type-checks its package anyway, so it writes the
+package's deep gc export data (.plaidexport) and dependents' importcfgs
+name that file instead of rules_go's compiled .x. Linting therefore
+schedules no GoCompilePkg or GoStdlib action. The .x is still used for
+a dependency the aspect did not lint (an implicit dep outside
+deps/embed, or a cgo archive in a cgo-enabled build, which the driver
+cannot type-check from its original sources).
 
 PlaidLint never fails on findings (they are SARIF results), so
 `--keep_going` aggregates findings across targets and the analysis
@@ -25,14 +34,43 @@ load("@rules_go//go:def.bzl", "GoArchive", "go_context")
 
 GO_TOOLCHAIN = "@rules_go//go:toolchain"
 
+# Every plaid action runs in this exec group. It requires the
+# lint_queue constraint, so a build system with a dedicated lint
+# execution platform routes lint work there by registering a platform
+# carrying @plaid_lint//bazel/platforms:lint_queue; a root module
+# without one registers the host fallback //bazel/platforms:host_lint.
+LINT_EXEC_GROUP = "lint"
+
+_LINT_EXEC_GROUPS = {
+    LINT_EXEC_GROUP: exec_group(
+        exec_compatible_with = [str(Label("//bazel/platforms:lint_queue"))],
+    ),
+}
+
 PlaidFactsInfo = provider(
-    doc = "Analysis facts produced by plaid-lint for one Go package.",
+    doc = "Analysis facts and export data produced by plaid-lint for one Go package.",
     fields = {
         "facts": "File: the package's .plaidfacts output.",
         "by_key": "dict[string, File]: facts files for packages an " +
                   "EMBEDDING target's archive may list as direct deps " +
                   "(this target's direct deps, plus embedded targets' " +
                   "maps), keyed by compiler package path.",
+        "export": "File or None: the package's .plaidexport (deep gc " +
+                  "export data written by its PlaidLint action). None " +
+                  "when the package's export data must come from the " +
+                  "compiler (a cgo archive in a cgo-enabled build).",
+        "by_key_export": "dict[string, File]: .plaidexport files keyed " +
+                         "like by_key, for the same set of packages.",
+    },
+)
+
+PlaidStdlibInfo = provider(
+    doc = "Standard-library export data written by plaid_stdlib_export.",
+    fields = {
+        "dir": "File: tree artifact laid out <goos>_<goarch>/<importpath>.a " +
+               "(raw gc export data), the unit driver's deps.stdlib_dir.",
+        "goos": "string: GOOS the tree was built for.",
+        "goarch": "string: GOARCH the tree was built for.",
     },
 )
 
@@ -175,7 +213,7 @@ def _memory_requirements(overrides, scope, inputs_size):
         return {}
     return {"resources:memory:%d" % mb: ""}
 
-def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker, output_suffix):
+def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker, output_suffix, stdlib):
     if GoArchive not in target:
         return []
 
@@ -183,30 +221,45 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
 
     go = go_context(ctx, ctx.attr)
 
-    # Standard-library types come from rules_go's compiled stdlib tree
-    # (a directory artifact laid out pkg/<goos>_<goarch>/<path>.a) —
-    # the same input GoCompilePkg resolves std imports against.
+    # Standard-library types come from plaid's own stdlib export tree
+    # (plaid_stdlib_export: one cached action per Go mode, no
+    # compilation). With no tree configured they come from rules_go's
+    # compiled stdlib (pkg/<goos>_<goarch>/<path>.a, the GoStdlib
+    # action's output) — the same layout, so the driver cannot tell.
     stdlib_dir = ""
     stdlib_inputs = []
-    for lib in go.stdlib.libs.to_list():
-        stdlib_inputs.append(lib)
-        if lib.is_directory and stdlib_dir == "":
-            stdlib_dir = lib.path
+    if stdlib:
+        info = stdlib[PlaidStdlibInfo]
+        if (info.goos, info.goarch) != (go.mode.goos, go.mode.goarch):
+            fail("plaid_lint: stdlib export %s is built for %s_%s but %s is configured for %s_%s" %
+                 (stdlib.label, info.goos, info.goarch, target.label, go.mode.goos, go.mode.goarch))
+        stdlib_dir = info.dir.path
+        stdlib_inputs = [info.dir]
+    else:
+        for lib in go.stdlib.libs.to_list():
+            stdlib_inputs.append(lib)
+            if lib.is_directory and stdlib_dir == "":
+                stdlib_dir = lib.path
 
     # Facts available to this target's archives, keyed by compiler
     # package path (matching importcfg keys by construction). `deps`
     # contribute their own facts; `embed` contributes the embedded
     # target's whole map, because embed flattening lifts the embedded
     # library's deps into this archive's `direct` set.
+    #
+    # by_key_export mirrors by_key for export data. A dep without an
+    # entry (not visited, or cgo) falls back to its compiled .x.
     by_key = {}
+    by_key_export = {}
     for dep in getattr(ctx.rule.attr, "embed", []):
         if PlaidFactsInfo in dep:
             by_key.update(dep[PlaidFactsInfo].by_key)
+            by_key_export.update(dep[PlaidFactsInfo].by_key_export)
             if GoArchive in dep:
-                by_key[_pkg_key(dep[GoArchive].data)] = dep[PlaidFactsInfo].facts
+                _record_dep(by_key, by_key_export, dep)
     for dep in getattr(ctx.rule.attr, "deps", []):
         if PlaidFactsInfo in dep and GoArchive in dep:
-            by_key[_pkg_key(dep[GoArchive].data)] = dep[PlaidFactsInfo].facts
+            _record_dep(by_key, by_key_export, dep)
 
     env = struct(
         ctx = ctx,
@@ -223,7 +276,15 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
 
     base_name = target.label.name + output_suffix
     lints = []
-    main = _lint_archive(env, target, archive, base_name, by_key, "")
+
+    # go_test's own archive is rules_go's synthesized testmain: no
+    # package imports it, so its facts and export data feed nothing,
+    # and it is generated-only (never a lint subject). Linting it would
+    # only pull in its implicit deps' compiled .x (bzltestutil and its
+    # closure live outside deps/embed).
+    main = None
+    if ctx.rule.kind != "go_test":
+        main = _lint_archive(env, target, archive, base_name, by_key, by_key_export, "")
     if main:
         lints.append(main)
 
@@ -262,15 +323,18 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
             else:
                 internal.append(d)
         test_by_key = dict(by_key)
+        test_by_key_export = dict(by_key_export)
         for i, d in enumerate(internal):
             suffix = ".internal" if i == 0 else ".internal.%d" % i
-            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, "internal")
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, test_by_key_export, "internal")
             if res:
                 lints.append(res)
                 test_by_key[_pkg_key(d.data)] = res.facts
+                if res.export:
+                    test_by_key_export[_pkg_key(d.data)] = res.export
         for i, d in enumerate(external):
             suffix = ".xtest" if i == 0 else ".xtest.%d" % i
-            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, "xtest")
+            res = _lint_archive(env, target, d, base_name + suffix, test_by_key, test_by_key_export, "xtest")
             if res:
                 lints.append(res)
 
@@ -308,8 +372,14 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
         transitive = transitive_reports,
     )
 
+    primary = main if main else lints[0]
     providers = [
-        PlaidFactsInfo(facts = main.facts if main else lints[0].facts, by_key = by_key),
+        PlaidFactsInfo(
+            facts = primary.facts,
+            by_key = by_key,
+            export = primary.export,
+            by_key_export = by_key_export,
+        ),
         PlaidLintInfo(
             reports = reports,
             direct_reports = depset(direct_reports),
@@ -318,6 +388,7 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
     output_groups = {
         "plaid_report": depset([l.sarif for l in lints]),
         "plaid_facts": depset([l.facts for l in lints]),
+        "plaid_export": depset([l.export for l in lints if l.export]),
     }
 
     # Validation: one collect over every full-mode SARIF this target
@@ -340,22 +411,42 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
             inputs = gating,
             outputs = [validation_out],
             execution_requirements = {"supports-path-mapping": "1"},
-            toolchain = GO_TOOLCHAIN,
+            exec_group = LINT_EXEC_GROUP,
         )
         output_groups["_validation"] = depset([validation_out])
 
     providers.append(OutputGroupInfo(**output_groups))
     return providers
 
-def _lint_archive(env, target, archive, base_name, by_key, memory_scope):
+def _record_dep(by_key, by_key_export, dep):
+    """Records a visited dep's facts and export data under its key."""
+    key = _pkg_key(dep[GoArchive].data)
+    info = dep[PlaidFactsInfo]
+    by_key[key] = info.facts
+    if info.export:
+        by_key_export[key] = info.export
+    elif key in by_key_export:
+        by_key_export.pop(key)
+
+def _is_cgo_archive(env, archive):
+    """Whether the archive's compile runs cgo, whose generated sources
+    the driver never sees: its own type-check of the original files
+    fails, so its export data must come from the compiler."""
+    return not env.go.mode.pure and getattr(archive.source, "cgo", False)
+
+def _lint_archive(env, target, archive, base_name, by_key, by_key_export, memory_scope):
     """Emits the PlaidLint action for one GoArchive. Returns a struct
-    (facts, sarif, mode) or None when the archive has nothing to lint.
+    (facts, sarif, export, mode, package) or None when the archive has
+    nothing to lint. export is None for cgo archives in a cgo build.
     memory_scope selects which plaid-lint-memory-mb tag applies:
-    "internal" or "xtest" for a go_test's test archives, "" otherwise."""
+    "internal" or "xtest" for a go_test's test archives, "" otherwise.
+
+    Deliberately independent of the archive's export_file: the lint
+    action must not depend on the compile of its own package."""
     ctx = env.ctx
     data = archive.data
     srcs = [s for s in data.srcs if s.extension == "go"]
-    if not srcs or not data.export_file:
+    if not srcs:
         return None
 
     facts_out = ctx.actions.declare_file(base_name + ".plaidfacts")
@@ -400,19 +491,22 @@ def _lint_archive(env, target, archive, base_name, by_key, memory_scope):
         mode = "facts_only"
 
     # Direct dep artifacts. Deep gc export data covers transitive
-    # types, so direct deps suffice — the nogo model. Facts are
-    # selected from by_key by the same key the importcfg uses; deps
-    # without an entry (stdlib, implicit runtime deps) contribute no
-    # facts, which the driver tolerates.
+    # types, so direct deps suffice — the nogo model. Export data is
+    # the dep's own PlaidLint output when the aspect linted it, and
+    # the compiled .x only otherwise; facts are selected from by_key
+    # by the same key the importcfg uses; deps without an entry
+    # (stdlib, implicit runtime deps) contribute no facts, which the
+    # driver tolerates.
     importcfg_lines = []
     dep_facts = {}
     dep_inputs = []
     for dep in archive.direct:
         ddata = dep.data
         key = _pkg_key(ddata)
-        if ddata.export_file:
-            importcfg_lines.append("packagefile %s=%s" % (key, ddata.export_file.path))
-            dep_inputs.append(ddata.export_file)
+        dep_export = by_key_export.get(key) or ddata.export_file
+        if dep_export:
+            importcfg_lines.append("packagefile %s=%s" % (key, dep_export.path))
+            dep_inputs.append(dep_export)
             if ddata.importmap and ddata.importmap != ddata.importpath:
                 importcfg_lines.append("importmap %s=%s" % (ddata.importpath, ddata.importmap))
         if key in by_key:
@@ -442,6 +536,10 @@ def _lint_archive(env, target, archive, base_name, by_key, memory_scope):
             "sarif": sarif_out.path,
         },
     }
+    export_out = None
+    if not _is_cgo_archive(env, archive):
+        export_out = ctx.actions.declare_file(base_name + ".plaidexport")
+        unit_cfg["out"]["export"] = export_out.path
 
     # go_test archives declare every test source and rely on the
     # compiler's -testfilter to split the internal (package foo) and
@@ -511,13 +609,13 @@ def _lint_archive(env, target, archive, base_name, by_key, memory_scope):
         executable = env.binary,
         arguments = [startup_args, request_args],
         inputs = inputs,
-        outputs = [facts_out, sarif_out],
+        outputs = [facts_out, sarif_out] + ([export_out] if export_out else []),
         execution_requirements = execution_requirements,
         resource_set = _resource_set,
-        toolchain = GO_TOOLCHAIN,
+        exec_group = LINT_EXEC_GROUP,
     )
 
-    return struct(facts = facts_out, sarif = sarif_out, mode = mode, package = _pkg_key(data))
+    return struct(facts = facts_out, sarif = sarif_out, export = export_out, mode = mode, package = _pkg_key(data))
 
 def _major_minor(version):
     """'1.26.5' -> '1.26' (types.Config.GoVersion wants a language
@@ -527,6 +625,74 @@ def _major_minor(version):
         return parts[0] + "." + parts[1]
     return version
 
+def _config_exec_lint():
+    """cfg for the binary the lint exec group runs: built for that
+    group's execution platform, which need not be the default one."""
+    return config.exec(LINT_EXEC_GROUP)
+
+def _plaid_stdlib_export_impl(ctx):
+    go = go_context(ctx, ctx.attr)
+    out = ctx.actions.declare_directory(ctx.label.name)
+    srcs = go.sdk.srcs.to_list()
+
+    args = ctx.actions.args()
+    args.add("stdlib")
+    args.add("--goroot", go.sdk.root_file.dirname)
+    args.add("--goos", go.mode.goos)
+    args.add("--goarch", go.mode.goarch)
+    args.add("--go-version", _major_minor(go.sdk.version))
+    if go.mode.tags:
+        args.add("--tags", ",".join(go.mode.tags))
+    if not go.mode.pure:
+        args.add("--cgo")
+    args.add("--out", out.path)
+
+    # The SDK's declared sources are the exact file set exported, so
+    # the tree does not depend on whether the action is sandboxed.
+    files = ctx.actions.args()
+    files.add_all([f for f in srcs if f.extension == "go"])
+    files.use_param_file("@%s", use_always = True)
+    files.set_param_file_format("multiline")
+
+    ctx.actions.run(
+        mnemonic = "PlaidStdlibExport",
+        progress_message = "Writing standard-library export data for %s_%s (plaid-lint)" % (go.mode.goos, go.mode.goarch),
+        executable = ctx.executable._plaid_lint,
+        arguments = [args, files],
+        inputs = srcs + [go.sdk.root_file],
+        outputs = [out],
+        exec_group = LINT_EXEC_GROUP,
+    )
+    return [
+        DefaultInfo(files = depset([out])),
+        PlaidStdlibInfo(dir = out, goos = go.mode.goos, goarch = go.mode.goarch),
+    ]
+
+plaid_stdlib_export = rule(
+    implementation = _plaid_stdlib_export_impl,
+    doc = """Standard-library export data for plaid lint actions.
+
+Type-checks the Go toolchain's SDK sources with plaid-lint's `stdlib`
+mode and writes one deep gc export file per standard-library package,
+laid out like rules_go's compiled stdlib (`<goos>_<goarch>/<path>.a`).
+The plaid aspects resolve std imports against it instead of the
+GoStdlib action's output, so linting never compiles the standard
+library. One action per Go mode (GOOS/GOARCH/tags/cgo) in the build,
+cached by SDK content like any other action.""",
+    attrs = {
+        "_plaid_lint": attr.label(
+            default = Label("//bazel:binary"),
+            executable = True,
+            cfg = _config_exec_lint(),
+        ),
+        "_go_context_data": attr.label(
+            default = Label("@rules_go//:go_context_data"),
+        ),
+    },
+    toolchains = [GO_TOOLCHAIN],
+    exec_groups = _LINT_EXEC_GROUPS,
+)
+
 def make_plaid_lint_aspect(
         binary = Label("//bazel:binary"),
         config = None,
@@ -535,7 +701,8 @@ def make_plaid_lint_aspect(
         no_validation = False,
         validation_ignore_linters = ["unused"],
         use_worker = False,
-        output_suffix = ""):
+        output_suffix = "",
+        stdlib_export = Label("//bazel:stdlib_export")):
     """Constructs a plaid_lint aspect bound to a configuration.
 
     See //bazel:defs.bzl for argument documentation; this factory is
@@ -547,7 +714,7 @@ def make_plaid_lint_aspect(
         "_plaid_lint": attr.label(
             default = binary,
             executable = True,
-            cfg = "exec",
+            cfg = _config_exec_lint(),
         ),
         # go_context(ctx, ctx.attr) reads the stdlib + mode through
         # this, exactly like rules_go's own rules.
@@ -559,6 +726,11 @@ def make_plaid_lint_aspect(
         attrs["_plaid_config"] = attr.label(
             default = config,
             allow_files = True,
+        )
+    if stdlib_export:
+        attrs["_plaid_stdlib_export"] = attr.label(
+            default = stdlib_export,
+            providers = [PlaidStdlibInfo],
         )
 
     def _impl(target, ctx):
@@ -572,6 +744,7 @@ def make_plaid_lint_aspect(
             validation_ignore_linters = validation_ignore_linters,
             use_worker = use_worker,
             output_suffix = output_suffix,
+            stdlib = getattr(ctx.attr, "_plaid_stdlib_export", None),
         )
 
     return aspect(
@@ -580,6 +753,7 @@ def make_plaid_lint_aspect(
         attrs = attrs,
         required_providers = [GoArchive],
         toolchains = [GO_TOOLCHAIN],
+        exec_groups = _LINT_EXEC_GROUPS,
         doc = "Runs plaid-lint unit per Go package; see @plaid_lint//bazel:defs.bzl.",
     )
 
@@ -609,6 +783,7 @@ def _plaid_module_lint_impl(ctx):
         inputs = [sarif_out],
         outputs = [validation_out],
         execution_requirements = {"supports-path-mapping": "1"},
+        exec_group = LINT_EXEC_GROUP,
     )
 
     return [
@@ -642,9 +817,10 @@ unit-mode hermeticity contract).""",
         "_plaid_lint": attr.label(
             default = Label("//bazel:binary"),
             executable = True,
-            cfg = "exec",
+            cfg = _config_exec_lint(),
         ),
     },
+    exec_groups = _LINT_EXEC_GROUPS,
 )
 
 def _emit_module_lint(ctx, binary, go_mod, config_files, module_path, base_name):
@@ -678,6 +854,7 @@ def _emit_module_lint(ctx, binary, go_mod, config_files, module_path, base_name)
         inputs = [cfg_out, go_mod] + config_files,
         outputs = [sarif_out],
         execution_requirements = {},
+        exec_group = LINT_EXEC_GROUP,
     )
     return sarif_out
 
@@ -772,6 +949,7 @@ def _suite_test_impl(ctx):
         inputs = sarifs,
         outputs = [aggregate_sarif, report_txt, verdict],
         execution_requirements = {"supports-path-mapping": "1"},
+        exec_group = LINT_EXEC_GROUP,
     )
 
     # The test runner prints the report and gates on the verdict's
@@ -871,15 +1049,27 @@ _SUITE_SETTING_ATTRS = {
     "_plaid_use_worker": attr.label(
         default = Label("//bazel:use_worker"),
     ),
+    # Every plaid action runs in the lint exec group, so the binary is
+    # configured for that group's platform (one binary configuration
+    # for the aspect and the rule alike).
     "_plaid_lint": attr.label(
         default = Label("//bazel:binary"),
         executable = True,
-        cfg = "exec",
+        cfg = _config_exec_lint(),
     ),
     "_go_context_data": attr.label(
         default = Label("@rules_go//:go_context_data"),
     ),
 }
+
+# The suite aspect also takes the stdlib export tree, through the
+# //bazel:stdlib_export label_flag.
+_SUITE_ASPECT_ATTRS = dicts.add(_SUITE_SETTING_ATTRS, {
+    "_plaid_stdlib_export": attr.label(
+        default = Label("//bazel:stdlib_export"),
+        providers = [PlaidStdlibInfo],
+    ),
+})
 
 def _suite_aspect_impl(target, ctx):
     config_files = _setting_config_files(ctx.attr._plaid_config)
@@ -893,14 +1083,16 @@ def _suite_aspect_impl(target, ctx):
         validation_ignore_linters = [],
         use_worker = _flag_bool(ctx.attr._plaid_use_worker),
         output_suffix = ".suite",
+        stdlib = ctx.attr._plaid_stdlib_export,
     )
 
 plaid_lint_suite_aspect = aspect(
     implementation = _suite_aspect_impl,
     attr_aspects = _DEP_ATTRS,
-    attrs = _SUITE_SETTING_ATTRS,
+    attrs = _SUITE_ASPECT_ATTRS,
     required_providers = [GoArchive],
     toolchains = [GO_TOOLCHAIN],
+    exec_groups = _LINT_EXEC_GROUPS,
     doc = """The build-settings-configured plaid aspect the suite rule
 carries on its `targets` attribute. Report-only per target (the suite
 is the gate); configured via the @plaid_lint//bazel:{config,
@@ -912,6 +1104,7 @@ module_path,facts_only,use_worker} settings. Its outputs use the
 plaid_lint_suite_test = rule(
     implementation = _suite_test_impl,
     test = True,
+    exec_groups = _LINT_EXEC_GROUPS,
     attrs = dicts.add(_SUITE_SETTING_ATTRS, {
         "targets": attr.label_list(
             aspects = [plaid_lint_suite_aspect],

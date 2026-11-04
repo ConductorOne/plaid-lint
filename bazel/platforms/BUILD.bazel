@@ -1,0 +1,29 @@
+# Execution-platform routing for plaid actions.
+#
+# Every plaid action (PlaidLint, ValidatePlaidLint, PlaidStdlibExport)
+# runs in the "lint" exec group, which requires :lint_queue. The
+# plaid_lint module registers no execution platform; the root module
+# does. A build system with a dedicated lint queue registers an
+# execution platform whose constraint_values include
+# @plaid_lint//bazel/platforms:lint_queue; lint actions then resolve to
+# it while every other action keeps its usual platform.
+#
+# A root module without one registers :host_lint, the host platform
+# plus :lint_queue. It is compatible with everything the host is, so
+# when it is registered ahead of the host, actions outside the "lint"
+# exec group may resolve to it as well; locally the two are equivalent.
+
+package(default_visibility = ["//visibility:public"])
+
+constraint_setting(name = "lint_queue_setting")
+
+constraint_value(
+    name = "lint_queue",
+    constraint_setting = ":lint_queue_setting",
+)
+
+platform(
+    name = "host_lint",
+    constraint_values = [":lint_queue"],
+    parents = ["@platforms//host"],
+)

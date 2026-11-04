@@ -115,7 +115,10 @@ type DepsConfig struct {
 	// Importcfg is the path to a compiler-style importcfg file whose
 	// `packagefile <importpath>=<file>` lines name export data for
 	// every import needed to type-check the package. Deep gc export
-	// data covers transitive imports, so direct deps suffice.
+	// data covers transitive imports, so direct deps suffice. A file
+	// may be compiler output (an archive such as a rules_go .x) or a
+	// dependency's out.export (raw gcexportdata); the reader tells
+	// them apart by their leading bytes.
 	Importcfg string `json:"importcfg"`
 
 	// Facts maps direct-dependency import paths to their .plaidfacts
@@ -123,10 +126,11 @@ type DepsConfig struct {
 	// third-party) and are tolerated, like nogo.
 	Facts map[string]string `json:"facts,omitempty"`
 
-	// StdlibDir is an optional directory of compiled standard-library
-	// packages laid out as <StdlibDir>/<goos>_<goarch>/<importpath>.a
+	// StdlibDir is an optional directory of standard-library export
+	// data laid out as <StdlibDir>/<goos>_<goarch>/<importpath>.a
 	// (the shape rules_go's compiled stdlib tree and a classic
-	// GOPATH/pkg both use). Import paths not named by the importcfg
+	// GOPATH/pkg both use, and the one `plaid-lint stdlib` writes —
+	// its .a files hold raw gcexportdata rather than archives). Import paths not named by the importcfg
 	// are resolved here before failing. The directory is a declared
 	// input — reading it is within the hermeticity contract.
 	StdlibDir string `json:"stdlib_dir,omitempty"`
@@ -170,6 +174,15 @@ type OutConfig struct {
 
 	// Sarif is the SARIF 2.1.0 diagnostics output path. Required.
 	Sarif string `json:"sarif"`
+
+	// Export is an optional output path for the package's deep gc
+	// export data (gcexportdata.Write: the indexed format, raw, with
+	// no archive framing). Written in ModeFull and ModeFactsOnly
+	// after type-checking, so a dependent's importcfg can name this
+	// file instead of a compiler-produced .x and the build never has
+	// to compile the package to lint its importers. Not valid in
+	// ModeModule, which type-checks nothing.
+	Export string `json:"export,omitempty"`
 }
 
 // LoadConfig reads and validates a unit.json.
@@ -230,6 +243,9 @@ func (c *Config) validate() error {
 	}
 	if c.Out.Facts == "" && mode != ModeModule {
 		return fmt.Errorf("out.facts is required")
+	}
+	if c.Out.Export != "" && mode == ModeModule {
+		return fmt.Errorf("out.export is not supported in analysis.mode %q", ModeModule)
 	}
 	for _, f := range c.Package.GoFiles {
 		if filepath.IsAbs(f) {
