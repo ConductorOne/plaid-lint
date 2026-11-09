@@ -15,6 +15,7 @@
 # the linter and its dependency closure (see README "Prebuilt binary").
 #
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag", "string_list_flag")
+load("//bazel/private:plaid.bzl", "plaid_stdlib_export")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -58,4 +59,19 @@ string_list_flag(
 bool_flag(
     name = "use_worker",
     build_setting_default = False,
+)
+
+# Standard-library export data the plaid aspects type-check against
+# (plaid_stdlib_export: plaid-lint's `stdlib` mode over the Go
+# toolchain's SDK sources, instead of rules_go's compiled stdlib). The
+# suite aspect reads it through this flag; plaid_lint_aspect takes the
+# same default as its stdlib_export argument. Point the flag at another
+# plaid_stdlib_export target to share one across workspaces.
+label_flag(
+    name = "stdlib_export",
+    build_setting_default = ":stdlib_export_default",
+)
+
+plaid_stdlib_export(
+    name = "stdlib_export_default",
 )

@@ -60,10 +60,12 @@ load(
     _PlaidFactsInfo = "PlaidFactsInfo",
     _PlaidLintInfo = "PlaidLintInfo",
     _PlaidReportInfo = "PlaidReportInfo",
+    _PlaidStdlibInfo = "PlaidStdlibInfo",
     _make_plaid_lint_aspect = "make_plaid_lint_aspect",
     _plaid_lint_suite_aspect = "plaid_lint_suite_aspect",
     _plaid_lint_suite_test = "plaid_lint_suite_test",
     _plaid_module_lint = "plaid_module_lint",
+    _plaid_stdlib_export = "plaid_stdlib_export",
 )
 
 PlaidFactsInfo = _PlaidFactsInfo
@@ -71,6 +73,10 @@ PlaidFactsInfo = _PlaidFactsInfo
 PlaidLintInfo = _PlaidLintInfo
 
 PlaidReportInfo = _PlaidReportInfo
+
+PlaidStdlibInfo = _PlaidStdlibInfo
+
+plaid_stdlib_export = _plaid_stdlib_export
 
 plaid_module_lint = _plaid_module_lint
 
@@ -82,7 +88,8 @@ def plaid_lint_aspect(
         no_validation = False,
         validation_ignore_linters = ["unused"],
         use_worker = False,
-        output_suffix = ""):
+        output_suffix = "",
+        stdlib_export = Label("@plaid_lint//bazel:stdlib_export")):
     """Returns a configured plaid_lint aspect.
 
     Call this in a .bzl file of your workspace (aspects applied from
@@ -115,6 +122,11 @@ def plaid_lint_aspect(
         Two differently-configured plaid aspects applied in one build
         would otherwise declare colliding outputs; give each variant a
         distinct suffix.
+      stdlib_export: a plaid_stdlib_export target supplying the
+        standard library's export data. Defaults to the
+        @plaid_lint//bazel:stdlib_export label_flag (the one the suite
+        aspect reads). None resolves std imports against rules_go's
+        compiled stdlib instead, which brings back the GoStdlib action.
 
     Returns:
       An aspect to apply via --aspects or from a rule attribute.
@@ -128,6 +140,7 @@ def plaid_lint_aspect(
         validation_ignore_linters = validation_ignore_linters,
         use_worker = use_worker,
         output_suffix = output_suffix,
+        stdlib_export = stdlib_export,
     )
 
 # The aggregate-enforcement path. plaid_lint_suite_test is a test

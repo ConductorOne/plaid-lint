@@ -244,3 +244,58 @@ func TestStore_ConcurrentPutGet(t *testing.T) {
 		t.Errorf("concurrent access: %v", err)
 	}
 }
+
+// TestStore_ExportOutputRoundTrip: an action declaring out.export gets
+// its export data back from a hit byte for byte, and an entry filled
+// without one cannot satisfy an action that declares it.
+func TestStore_ExportOutputRoundTrip(t *testing.T) {
+	src := t.TempDir()
+	out := Outputs{
+		Sarif:  filepath.Join(src, "a.sarif"),
+		Facts:  filepath.Join(src, "a.plaidfacts"),
+		Export: filepath.Join(src, "a.plaidexport"),
+	}
+	for p, body := range map[string]string{out.Sarif: `{"runs":[]}`, out.Facts: "PLF\x01facts", out.Export: "i\x00export"} {
+		if err := os.WriteFile(p, []byte(body), 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entry, err := ReadOutputs(out, nil)
+	if err != nil {
+		t.Fatalf("ReadOutputs: %v", err)
+	}
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var k Key
+	k[0] = 7
+	if err := store.Put(k, entry); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get(k)
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v, %v", got, err)
+	}
+	dstDir := t.TempDir()
+	dst := Outputs{
+		Sarif:  filepath.Join(dstDir, "a.sarif"),
+		Facts:  filepath.Join(dstDir, "a.plaidfacts"),
+		Export: filepath.Join(dstDir, "a.plaidexport"),
+	}
+	if err := got.Write(dst); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	b, err := os.ReadFile(dst.Export)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "i\x00export" {
+		t.Errorf("export output = %q after a cache round trip", b)
+	}
+
+	noExport := &Entry{Sarif: []byte(`{}`), Facts: []byte("f"), HasFacts: true}
+	if err := noExport.Write(dst); err == nil {
+		t.Error("an entry without export data satisfied an action declaring out.export")
+	}
+}

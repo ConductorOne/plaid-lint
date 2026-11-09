@@ -302,7 +302,7 @@ func unitOnce(ctx context.Context, cfgPath string, sess *unitSession) (int, []st
 
 // unitCacheOutputs names the action's declared outputs for the cache.
 func unitCacheOutputs(ucfg *unit.Config) unitcache.Outputs {
-	return unitcache.Outputs{Sarif: ucfg.Out.Sarif, Facts: ucfg.Out.Facts}
+	return unitcache.Outputs{Sarif: ucfg.Out.Sarif, Facts: ucfg.Out.Facts, Export: ucfg.Out.Export}
 }
 
 // unitCacheAttempt carries the outcome of key computation from the
@@ -380,9 +380,10 @@ Usage:
 
 The unit.json config names the package sources, an importcfg mapping
 import paths to compiler export data, dependency fact files, the
-.golangci config, and the output paths (SARIF diagnostics + a
-.plaidfacts fact file). Nothing is discovered: no go list, no module
-resolution, no Go toolchain.
+.golangci config, and the output paths (SARIF diagnostics, a
+.plaidfacts fact file and, optionally, the package's gc export data
+for dependents to type-check against). Nothing is discovered: no go
+list, no module resolution, no Go toolchain.
 
 Findings are written to the SARIF output and never affect the exit
 code. Exit codes: 0 analysis completed (with or without findings),

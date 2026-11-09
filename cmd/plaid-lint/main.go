@@ -111,6 +111,8 @@ func (a *app) run() int {
 		return a.runUnit(rest)
 	case "collect":
 		return a.runCollect(rest)
+	case "stdlib":
+		return a.runStdlib(rest)
 	case "linters":
 		return a.runLinters(rest)
 	case "version":
@@ -145,6 +147,7 @@ Usage:
 Available Commands:
   run         Lint the code.
   unit        Analyze exactly one package from declared inputs (build-system action mode).
+  stdlib      Write standard-library export data for unit actions (build-system action mode).
   linters     List current linters configuration.
   version     Display the plaid-lint version.
   cache       Cache control and information.
