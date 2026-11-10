@@ -35,6 +35,11 @@
 #      only: max(input-count tier, tag), scoped per test archive,
 #      malformed tags fail analysis, and adding a tag reuses cached
 #      results
+#  16. linting never needs a compile: the action closure of every
+#      PlaidLint action contains no GoCompilePkg or GoStdlib action
+#      for a vendored dep with importmap != importpath, a
+#      go_proto_library (and the protobuf runtime behind it), or the
+#      standard library
 #
 # Runnable locally and in CI from this directory: ./e2e.sh
 # Override the bazel binary with BAZEL=... (defaults to bazel).
@@ -625,5 +630,85 @@ for case in \
 done
 rm -rf memtag_bad
 pass "(w) plaid-lint-memory-mb reserves max(tier, tag) on PlaidLint actions only, rejects malformed tags, and reuses cached results"
+
+# (x) No compile behind lint. Every dependency's export data must come
+# from a PlaidLint action and the standard library's from
+# PlaidStdlibExport, never from a compiled archive. //exportgraph
+# imports a vendored package whose importmap differs from its import
+# path, a go_proto_library (whose protobuf runtime deps rules_go adds
+# through the proto compiler, not `deps`), and the standard library.
+# The assertion walks the action graph from every PlaidLint and
+# PlaidStdlibExport action through the producers of their inputs and
+# fails on any target-configuration GoCompilePkg or GoStdlib action
+# (exec-configuration compiles build tools, such as protoc-gen-go, and
+# are allowed), and on any compiled .x among PlaidLint inputs. It runs
+# for both the --aspects factory aspect and the suite aspect.
+check_no_compile() {
+  local what="$1"; shift
+  local aq
+  aq="$(mktemp)"
+  set +e
+  "$BAZEL" aquery "$@" --output=jsonproto >"$aq" 2>/dev/null
+  CODE=$?
+  set -e
+  [[ "$CODE" -eq 0 ]] || { rm -f "$aq"; fail "(x) aquery for $what failed"; }
+  set +e
+  OUT="$(python3 - "$aq" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+frag = {f["id"]: f for f in d["pathFragments"]}
+def path(fid):
+    parts = []
+    while fid:
+        f = frag[fid]
+        parts.append(f["label"])
+        fid = f.get("parentId")
+    return "/".join(reversed(parts))
+art = {a["id"]: path(a["pathFragmentId"]) for a in d["artifacts"]}
+depsets = {s["id"]: s for s in d["depSetOfFiles"]}
+tool = {c["id"] for c in d["configuration"] if c.get("isTool")}
+def files(ids):
+    out, stack, seen = [], list(ids), set()
+    while stack:
+        i = stack.pop()
+        if i in seen:
+            continue
+        seen.add(i)
+        out += depsets[i].get("directArtifactIds", [])
+        stack += depsets[i].get("transitiveDepSetIds", [])
+    return out
+producer = {o: a for a in d["actions"] for o in a.get("outputIds", [])}
+roots = [a for a in d["actions"] if a["mnemonic"] in ("PlaidLint", "PlaidStdlibExport")]
+linted = {art[a["primaryOutputId"]].rsplit("/", 1)[-1] for a in roots if a["mnemonic"] == "PlaidLint"}
+want = ["exportgraph", "mapped", "greetpb", "protoimpl", "timestamppb"]
+missing = [w for w in want if not any(n.startswith(w + ".") for n in linted)]
+if missing or not any(a["mnemonic"] == "PlaidStdlibExport" for a in roots):
+    print("vacuous: no PlaidLint action for %s or no PlaidStdlibExport" % missing)
+    sys.exit(1)
+bad = sorted({art[i] for a in roots if a["mnemonic"] == "PlaidLint"
+              for i in files(a.get("inputDepSetIds", [])) if art[i].endswith(".x")})
+seen, stack = set(), list(roots)
+while stack:
+    a = stack.pop()
+    if a["actionKey"] in seen:
+        continue
+    seen.add(a["actionKey"])
+    if a["mnemonic"] in ("GoCompilePkg", "GoStdlib") and a["configurationId"] not in tool:
+        bad.append("%s %s" % (a["mnemonic"], art[a["primaryOutputId"]]))
+    stack += [producer[i] for i in files(a.get("inputDepSetIds", [])) if i in producer]
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+)"
+  CODE=$?
+  set -e
+  rm -f "$aq"
+  [[ "$CODE" -eq 0 ]] || fail "(x) $what: lint depends on compiled packages"
+}
+check_no_compile "--aspects" --config=lint 'deps(//exportgraph) + deps(@plaid_lint//bazel:stdlib_export_default)'
+check_no_compile "suite" 'deps(//:lint_exportgraph) + deps(@plaid_lint//bazel:stdlib_export_default)'
+run test //:lint_exportgraph
+[[ "$CODE" -eq 0 ]] || fail "(x) expected the //exportgraph suite to pass"
+pass "(x) lint of vendored-importmap, go_proto_library and stdlib deps needs no GoCompilePkg or GoStdlib action"
 
 echo "OK: all e2e assertions passed"

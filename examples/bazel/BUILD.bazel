@@ -77,3 +77,14 @@ plaid_lint_suite_test(
     tags = ["manual"],
     targets = ["//wrapper"],
 )
+
+# //exportgraph's dependencies all supply export data from PlaidLint
+# actions — a vendored package with importmap != importpath, a
+# go_proto_library with the protobuf runtime behind it, and the
+# standard library — so this clean suite schedules no compile (e2e.sh
+# walks its action graph to assert that).
+plaid_lint_suite_test(
+    name = "lint_exportgraph",
+    tags = ["manual"],
+    targets = ["//exportgraph"],
+)

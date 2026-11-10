@@ -1,0 +1,11 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+# Gazelle's vendor convention: the compiler package path (importmap) is
+# vendor-qualified, while sources import the bare importpath.
+go_library(
+    name = "mapped",
+    srcs = ["mapped.go"],
+    importmap = "example.com/plaidexample/vendor/example.com/mapped",
+    importpath = "example.com/mapped",
+    visibility = ["//visibility:public"],
+)

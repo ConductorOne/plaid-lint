@@ -16,10 +16,11 @@ actions instead of coming from compiles:
 Each PlaidLint action type-checks its package anyway, so it writes the
 package's deep gc export data (.plaidexport) and dependents' importcfgs
 name that file instead of rules_go's compiled .x. Linting therefore
-schedules no GoCompilePkg or GoStdlib action. The .x is still used for
-a dependency the aspect did not lint (an implicit dep outside
-deps/embed, or a cgo archive in a cgo-enabled build, which the driver
-cannot type-check from its original sources).
+schedules no GoCompilePkg or GoStdlib action. The .x is used only for
+a direct dependency the aspect never reaches (one that enters an
+archive through an attribute outside _DEP_ATTRS) and for a cgo archive
+in a cgo-enabled build, which the driver cannot type-check from its
+original sources.
 
 PlaidLint never fails on findings (they are SARIF results), so
 `--keep_going` aggregates findings across targets and the analysis
@@ -106,7 +107,34 @@ test-variant supersede rule needs.""",
 # Attributes an aspect propagates along. embed edges matter: an
 # embedding go_library's archive covers the embedded sources, and
 # go_test internal archives reach their library through embed.
-_DEP_ATTRS = ["deps", "embed"]
+# compilers/compiler are go_proto_library's: rules_go merges each
+# go_proto_compiler's `deps` (the protobuf runtime packages the
+# generated code imports) into the proto archive's direct deps, so the
+# aspect has to reach them to supply their export data.
+_DEP_ATTRS = ["deps", "embed", "compilers", "compiler"]
+
+# Attributes whose targets' whole facts/export maps are lifted into
+# the visiting archive: rules_go flattens an embedded target's or a
+# proto compiler's deps into the archive's own `direct` set.
+_LIFTED_ATTRS = ["embed", "compilers", "compiler"]
+
+# The aspects carry no required_providers: go_proto_library and
+# go_proto_compiler advertise no providers, so requiring GoArchive
+# would stop propagation at every proto target and leave its archive
+# (and the protobuf runtime under it) to compiled .x files. The Go
+# toolchain is optional for the same reason; targets without a
+# GoArchive only forward their deps' maps and reports.
+_ASPECT_TOOLCHAINS = [config_common.toolchain_type(GO_TOOLCHAIN, mandatory = False)]
+
+def _dep_targets(ctx, attr_name):
+    """The targets in one of _DEP_ATTRS, as a list (compiler is a
+    single label; unknown attributes yield nothing)."""
+    v = getattr(ctx.rule.attr, attr_name, None)
+    if v == None:
+        return []
+    if type(v) == "list":
+        return v
+    return [v]
 
 def _pkg_key(data):
     """The compiler package path for a GoArchiveData — the key both
@@ -214,8 +242,52 @@ def _memory_requirements(overrides, scope, inputs_size):
     return {"resources:memory:%d" % mb: ""}
 
 def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_validation, validation_ignore_linters, use_worker, output_suffix, stdlib):
+    # Facts available to this target's archives, keyed by compiler
+    # package path (matching importcfg keys by construction). `deps`
+    # contribute their own facts; lifted attributes (embed, proto
+    # compilers) contribute the target's whole map, because rules_go
+    # flattens their deps into this archive's `direct` set.
+    #
+    # by_key_export mirrors by_key for export data. A dep without an
+    # entry (not reachable through _DEP_ATTRS, or cgo) falls back to
+    # its compiled .x.
+    by_key = {}
+    by_key_export = {}
+    for attr_name in _DEP_ATTRS:
+        lifted = attr_name in _LIFTED_ATTRS
+        for dep in _dep_targets(ctx, attr_name):
+            if PlaidFactsInfo not in dep:
+                continue
+            if lifted or GoArchive not in dep:
+                by_key.update(dep[PlaidFactsInfo].by_key)
+                by_key_export.update(dep[PlaidFactsInfo].by_key_export)
+            if GoArchive in dep:
+                _record_dep(by_key, by_key_export, dep)
+
+    transitive_reports = []
+    for attr_name in _DEP_ATTRS:
+        for dep in _dep_targets(ctx, attr_name):
+            if PlaidLintInfo in dep:
+                transitive_reports.append(dep[PlaidLintInfo].reports)
+
     if GoArchive not in target:
-        return []
+        # A go_proto_compiler (or any other non-archive node on a
+        # _DEP_ATTRS edge) lints nothing itself; it forwards the maps
+        # an archive lifting it needs, and its deps' reports.
+        providers = []
+        if by_key or by_key_export:
+            providers.append(PlaidFactsInfo(
+                facts = None,
+                by_key = by_key,
+                export = None,
+                by_key_export = by_key_export,
+            ))
+        if transitive_reports:
+            providers.append(PlaidLintInfo(
+                reports = depset(transitive = transitive_reports),
+                direct_reports = depset(),
+            ))
+        return providers
 
     archive = target[GoArchive]
 
@@ -240,26 +312,6 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
             stdlib_inputs.append(lib)
             if lib.is_directory and stdlib_dir == "":
                 stdlib_dir = lib.path
-
-    # Facts available to this target's archives, keyed by compiler
-    # package path (matching importcfg keys by construction). `deps`
-    # contribute their own facts; `embed` contributes the embedded
-    # target's whole map, because embed flattening lifts the embedded
-    # library's deps into this archive's `direct` set.
-    #
-    # by_key_export mirrors by_key for export data. A dep without an
-    # entry (not visited, or cgo) falls back to its compiled .x.
-    by_key = {}
-    by_key_export = {}
-    for dep in getattr(ctx.rule.attr, "embed", []):
-        if PlaidFactsInfo in dep:
-            by_key.update(dep[PlaidFactsInfo].by_key)
-            by_key_export.update(dep[PlaidFactsInfo].by_key_export)
-            if GoArchive in dep:
-                _record_dep(by_key, by_key_export, dep)
-    for dep in getattr(ctx.rule.attr, "deps", []):
-        if PlaidFactsInfo in dep and GoArchive in dep:
-            _record_dep(by_key, by_key_export, dep)
 
     env = struct(
         ctx = ctx,
@@ -337,12 +389,6 @@ def _plaid_lint_aspect_impl(target, ctx, config, module_path, facts_only, no_val
             res = _lint_archive(env, target, d, base_name + suffix, test_by_key, test_by_key_export, "xtest")
             if res:
                 lints.append(res)
-
-    transitive_reports = []
-    for attr_name in _DEP_ATTRS:
-        for dep in getattr(ctx.rule.attr, attr_name, []):
-            if PlaidLintInfo in dep:
-                transitive_reports.append(dep[PlaidLintInfo].reports)
 
     if not lints:
         # Nothing of this target's own to lint (no compiled Go srcs);
@@ -422,6 +468,8 @@ def _record_dep(by_key, by_key_export, dep):
     """Records a visited dep's facts and export data under its key."""
     key = _pkg_key(dep[GoArchive].data)
     info = dep[PlaidFactsInfo]
+    if not info.facts:
+        return
     by_key[key] = info.facts
     if info.export:
         by_key_export[key] = info.export
@@ -685,8 +733,11 @@ cached by SDK content like any other action.""",
             executable = True,
             cfg = _config_exec_lint(),
         ),
-        "_go_context_data": attr.label(
-            default = Label("@rules_go//:go_context_data"),
+        # Build mode only (tags, pure, race): go_context reads it
+        # from here. Not _go_context_data, whose stdlib edge would put
+        # rules_go's compiled stdlib (GoStdlib) in this rule's graph.
+        "_go_config": attr.label(
+            default = Label("@rules_go//:go_config"),
         ),
     },
     toolchains = [GO_TOOLCHAIN],
@@ -716,12 +767,20 @@ def make_plaid_lint_aspect(
             executable = True,
             cfg = _config_exec_lint(),
         ),
-        # go_context(ctx, ctx.attr) reads the stdlib + mode through
-        # this, exactly like rules_go's own rules.
-        "_go_context_data": attr.label(
-            default = Label("@rules_go//:go_context_data"),
-        ),
     }
+    if stdlib_export:
+        # go_context(ctx, ctx.attr) reads the mode from here. The
+        # stdlib comes from stdlib_export, so the aspect deliberately
+        # has no edge to rules_go's compiled stdlib (GoStdlib).
+        attrs["_go_config"] = attr.label(
+            default = Label("@rules_go//:go_config"),
+        )
+    else:
+        # The opt-out: std imports resolve against rules_go's compiled
+        # stdlib, which go_context reads through _go_context_data.
+        attrs["_go_context_data"] = attr.label(
+            default = Label("@rules_go//:go_context_data"),
+        )
     if config:
         attrs["_plaid_config"] = attr.label(
             default = config,
@@ -751,8 +810,7 @@ def make_plaid_lint_aspect(
         implementation = _impl,
         attr_aspects = _DEP_ATTRS,
         attrs = attrs,
-        required_providers = [GoArchive],
-        toolchains = [GO_TOOLCHAIN],
+        toolchains = _ASPECT_TOOLCHAINS,
         exec_groups = _LINT_EXEC_GROUPS,
         doc = "Runs plaid-lint unit per Go package; see @plaid_lint//bazel:defs.bzl.",
     )
@@ -1057,14 +1115,16 @@ _SUITE_SETTING_ATTRS = {
         executable = True,
         cfg = _config_exec_lint(),
     ),
-    "_go_context_data": attr.label(
-        default = Label("@rules_go//:go_context_data"),
-    ),
 }
 
 # The suite aspect also takes the stdlib export tree, through the
-# //bazel:stdlib_export label_flag.
+# //bazel:stdlib_export label_flag, and the Go mode (see
+# make_plaid_lint_aspect: no _go_context_data, hence no edge to
+# rules_go's compiled stdlib).
 _SUITE_ASPECT_ATTRS = dicts.add(_SUITE_SETTING_ATTRS, {
+    "_go_config": attr.label(
+        default = Label("@rules_go//:go_config"),
+    ),
     "_plaid_stdlib_export": attr.label(
         default = Label("//bazel:stdlib_export"),
         providers = [PlaidStdlibInfo],
@@ -1090,8 +1150,7 @@ plaid_lint_suite_aspect = aspect(
     implementation = _suite_aspect_impl,
     attr_aspects = _DEP_ATTRS,
     attrs = _SUITE_ASPECT_ATTRS,
-    required_providers = [GoArchive],
-    toolchains = [GO_TOOLCHAIN],
+    toolchains = _ASPECT_TOOLCHAINS,
     exec_groups = _LINT_EXEC_GROUPS,
     doc = """The build-settings-configured plaid aspect the suite rule
 carries on its `targets` attribute. Report-only per target (the suite

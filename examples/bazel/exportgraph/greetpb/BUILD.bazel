@@ -1,0 +1,17 @@
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "greet_proto",
+    srcs = ["greet.proto"],
+    deps = ["@protobuf//:timestamp_proto"],
+)
+
+# The protobuf runtime packages the generated code imports reach this
+# archive through the default go_proto compiler, not through deps.
+go_proto_library(
+    name = "greetpb",
+    importpath = "example.com/plaidexample/exportgraph/greetpb",
+    proto = ":greet_proto",
+    visibility = ["//visibility:public"],
+)
