@@ -8,6 +8,7 @@ local_path_override(
 
 bazel_dep(name = "rules_go", version = "0.62.0")
 bazel_dep(name = "gazelle", version = "0.52.2")
+bazel_dep(name = "protobuf", version = "33.4")
 
 # plaid actions require @plaid_lint//bazel/platforms:lint_queue, and the
 # plaid_lint module registers no execution platform. A root module

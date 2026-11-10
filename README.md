@@ -222,8 +222,11 @@ everything it builds. What you get:
   compiled `.x`; the standard library comes from one `PlaidStdlibExport` action per Go mode
   (`plaid_stdlib_export`, selected by `--@plaid_lint//bazel:stdlib_export`) instead of the
   `GoStdlib` action. A lint-only build therefore schedules no `GoCompilePkg` or `GoStdlib`
-  action. A dependency the aspect does not visit (an implicit dep outside `deps`/`embed`)
-  or a cgo archive in a cgo-enabled build still contributes its compiled `.x`.
+  action. The aspect follows `deps`, `embed`, and `go_proto_library`'s `compilers` (whose
+  `deps` — the protobuf runtime — rules_go adds to the generated package's imports), so
+  proto packages and their runtime are linted for export data too. Only a dependency that
+  enters an archive through some other attribute, or a cgo archive in a cgo-enabled
+  build, still contributes its compiled `.x`.
 - **Lint actions have their own exec group.** Every plaid action runs in the `lint` exec
   group, which requires `@plaid_lint//bazel/platforms:lint_queue`. This module registers
   no execution platform, so the root module must register one: either

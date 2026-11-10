@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+# Imports one dependency of each shape whose export data must come
+# from a PlaidLint action rather than a compile: a vendored package
+# with importmap != importpath, a go_proto_library (and, through it,
+# the protobuf runtime), and the standard library. e2e.sh asserts
+# that linting it schedules no GoCompilePkg or GoStdlib action.
+go_library(
+    name = "exportgraph",
+    srcs = ["exportgraph.go"],
+    importpath = "example.com/plaidexample/exportgraph",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//exportgraph/greetpb",
+        "//vendor/example.com/mapped",
+    ],
+)

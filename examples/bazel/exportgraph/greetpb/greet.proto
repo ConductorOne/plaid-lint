@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package plaidexample.greet;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "example.com/plaidexample/exportgraph/greetpb";
+
+message Greeting {
+  string text = 1;
+  google.protobuf.Timestamp at = 2;
+}
